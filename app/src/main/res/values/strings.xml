@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">灵感笔记</string>
+    <string name="search_hint">搜索笔记…</string>
+    <string name="empty_title">还没有笔记</string>
+    <string name="empty_subtitle">点击右下角 + 记录你的第一个灵感</string>
+    <string name="new_note">新建笔记</string>
+    <string name="edit_note">编辑笔记</string>
+    <string name="title_hint">标题</string>
+    <string name="content_hint">写点什么…</string>
+    <string name="word_count">%1$d 字</string>
+    <string name="settings">设置</string>
+    <string name="theme">主题</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_dark">深色</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_color">主题色</string>
+    <string name="card_radius">卡片圆角</string>
+    <string name="card_shadow">卡片阴影</string>
+    <string name="shadow_flat">扁平</string>
+    <string name="shadow_elevated">微阴影</string>
+    <string name="preview">预览效果</string>
+    <string name="pin">置顶</string>
+    <string name="unpin">取消置顶</string>
+    <string name="share">分享</string>
+    <string name="delete">删除</string>
+    <string name="undo">撤销</string>
+    <string name="note_deleted">笔记已删除</string>
+    <string name="save_error">保存失败</string>
+</resources>

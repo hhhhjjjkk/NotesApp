@@ -1,0 +1,245 @@
+package com.example.notesapp.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.notesapp.R
+import com.example.notesapp.data.Note
+import com.example.notesapp.ui.components.ColorPicker
+import com.example.notesapp.ui.theme.noteCardColors
+import com.example.notesapp.ui.viewmodel.NotesViewModel
+import kotlinx.coroutines.delay
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditorScreen(
+    viewModel: NotesViewModel,
+    noteId: Long,
+    onBack: () -> Unit
+) {
+    val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val existingNote = remember(noteId, notes) {
+        notes.find { it.id == noteId }
+    }
+
+    var title by rememberSaveable { mutableStateOf("") }
+    var content by rememberSaveable { mutableStateOf("") }
+    var selectedColor by rememberSaveable { mutableStateOf(0) }
+    var isPinned by rememberSaveable { mutableStateOf(false) }
+    var noteLoaded by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(existingNote) {
+        if (!noteLoaded) {
+            existingNote?.let {
+                title = it.title
+                content = it.content
+                selectedColor = it.color
+                isPinned = it.isPinned
+                noteLoaded = true
+            }
+        }
+    }
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(80)
+        focusRequester.requestFocus()
+    }
+
+    fun buildNote(): Note {
+        val base = existingNote ?: Note()
+        return base.copy(
+            title = title.trim(),
+            content = content,
+            color = selectedColor,
+            isPinned = isPinned,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    fun saveAndExit() {
+        val note = buildNote()
+        if (note.title.isNotBlank() || note.content.isNotBlank()) {
+            viewModel.saveNote(note) { onBack() }
+        } else {
+            onBack()
+        }
+    }
+
+    BackHandler { saveAndExit() }
+
+    LaunchedEffect(title, content, selectedColor, isPinned) {
+        if (noteId != 0L) {
+            delay(1500)
+            val note = buildNote()
+            if (note.title.isNotBlank() || note.content.isNotBlank()) {
+                viewModel.saveNote(note) {}
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(if (noteId == 0L) R.string.new_note else R.string.edit_note),
+                        style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Medium)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { saveAndExit() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { isPinned = !isPinned }) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = stringResource(R.string.pin),
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (noteId != 0L) {
+                        IconButton(onClick = {
+                            existingNote?.let { viewModel.deleteNote(it) }
+                            onBack()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.delete),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.word_count, content.length + title.length),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(16.dp)
+            ) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ColorPicker(
+                    selectedColor = noteCardColors.find { it.toArgb() == selectedColor }
+                        ?: noteCardColors.first(),
+                    onColorSelected = { selectedColor = it.toArgb() },
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+        ) {
+            BasicTextField(
+                value = title,
+                onValueChange = { title = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp)
+                    .focusRequester(focusRequester),
+                textStyle = TextStyle(
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                singleLine = true,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorationBox = { innerTextField ->
+                    if (title.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.title_hint),
+                            style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+            BasicTextField(
+                value = content,
+                onValueChange = { content = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+                textStyle = TextStyle(
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorationBox = { innerTextField ->
+                    if (content.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.content_hint),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+        }
+    }
+}
