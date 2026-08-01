@@ -1,5 +1,7 @@
 package com.example.notesapp.ui.theme
 
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import android.os.Build
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,6 +19,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -127,3 +130,21 @@ fun Modifier.liquidGlassSurface(
     .let { if (blurRadius > 0.dp) it.glassBlur(blurRadius) else it }
     .glassHighlight(shape, isDark)
     .glassBorder(shape, isDark, borderWidth)
+
+/**
+ * 真实图层模糊：在 Android 12+（API 31+）通过 RenderEffect 对所在 graphicsLayer
+ * 的渲染内容做高斯模糊，得到真实的"磨砂玻璃"质感；低版本自动降级为无操作。
+ *
+ * 注意：与 [glassBlur] 不同，本方法基于硬件 RenderEffect，模糊质量更高、性能更好，
+ * 且可与 [drawWithContent] 绘制的玻璃层叠加形成更真实的折射观感。
+ */
+fun Modifier.realGlassBlur(radius: Dp = 12.dp): Modifier =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        this.then(
+            Modifier.graphicsLayer {
+                val px = radius.toPx()
+                renderEffect = RenderEffect.createBlurEffect(px, px, Shader.TileMode.CLAMP)
+                    .asComposeRenderEffect()
+            }
+        )
+    } else this

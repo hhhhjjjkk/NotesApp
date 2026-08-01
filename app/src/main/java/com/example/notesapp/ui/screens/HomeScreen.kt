@@ -185,7 +185,6 @@ fun HomeScreen(
         floatingActionButton = {
             // FAB 已移到底部滑块同一 Row，避免与滑块重叠
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(
@@ -441,6 +440,16 @@ fun HomeScreen(
             }
         }
     }
+
+    // Snackbar：放在外层 Box 底部，预留底部液态玻璃滑块的高度，
+    // 避免提示框被滑块遮挡或与滑块位置错乱（已完成/删除备忘录的提示不再错位）
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .padding(bottom = 84.dp)
+    )
     } // 关闭外层 Box
 
     // 长按弹出的底部操作菜单

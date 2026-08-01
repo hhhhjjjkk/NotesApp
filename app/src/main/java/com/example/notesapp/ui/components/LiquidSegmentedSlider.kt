@@ -33,6 +33,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -41,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.data.NoteType
+import com.example.notesapp.ui.theme.realGlassBlur
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -92,6 +96,10 @@ fun LiquidSegmentedSlider(
     val trackBottomLight = if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.20f)
     val trackEdge = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.22f)
 
+    // 主题色：用于实时跟随滑块的染色高光带
+    val primary = MaterialTheme.colorScheme.primary
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
@@ -116,6 +124,17 @@ fun LiquidSegmentedSlider(
                         endY = h
                     )
                 )
+                // 实时跟随滑块的主题色染色带：只有滑块覆盖到的地方变色，
+                // 随 animOffset 实时移动（拖动 snapTo / 释放 animateTo 均逐帧刷新），无延迟。
+                val thumbW = (size.width - 2 * padPx) / 2f
+                if (thumbW > 0f) {
+                    val bx = padPx + animOffset.value * thumbW
+                    drawRect(
+                        color = primary.copy(alpha = 0.12f),
+                        topLeft = Offset(bx, 0f),
+                        size = Size(thumbW, h)
+                    )
+                }
             }
             .border(width = 1.dp, color = trackEdge, shape = CircleShape)
             .onSizeChanged { widthPx = it.width.toFloat() }
@@ -151,14 +170,17 @@ fun LiquidSegmentedSlider(
         val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
         val thumbOffsetPx = animOffset.value * thumbWidthPx
 
-        // 滑块（凸起玻璃）配色
+        // 滑块（凸起玻璃）配色：在原基础上叠加主题色，让"覆盖处"呈现明显变色
         val thumbTop = if (isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.55f)
         val thumbBottom = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.26f)
         val thumbSpecular = if (isDark) Color.White.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.80f)
         val thumbShade = if (isDark) Color.Black.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.06f)
         val thumbEdge = if (isDark) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.62f)
+        // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
+        val thumbTint = primary.copy(alpha = if (isDark) 0.10f else 0.08f)
 
         // 滑块：液态玻璃材质，随手指实时位移
+        // realGlassBlur 在 Android 12+ 对玻璃层做真实高斯模糊，告别"塑料感"
         Box(
             modifier = Modifier
                 .padding(vertical = padDp)
@@ -172,6 +194,7 @@ fun LiquidSegmentedSlider(
                     spotColor = Color.Black.copy(alpha = 0.18f)
                 )
                 .clip(CircleShape)
+                .realGlassBlur(8.dp)
                 .drawBehind {
                     val h = size.height
                     // 基础渐变：上亮下暗，模拟玻璃受光
@@ -182,6 +205,8 @@ fun LiquidSegmentedSlider(
                             endY = h
                         )
                     )
+                    // 主题色染色层：覆盖区域明显变色
+                    drawRect(thumbTint)
                     // 顶部窄高光：镜面反射
                     drawRect(
                         Brush.verticalGradient(
@@ -202,7 +227,10 @@ fun LiquidSegmentedSlider(
                 .border(width = 1.dp, color = thumbEdge, shape = CircleShape)
         )
 
-        // 左右文字：选中态加粗高亮
+        // 左右文字：颜色随滑块实时插值（lerp），不再等 selected 切换后才变色——彻底消除"颜色延迟跟随"
+        // animOffset: 0=左(备忘录)选中, 1=右(代办)选中
+        val leftColor = lerp(primary, onSurfaceVariant, animOffset.value)
+        val rightColor = lerp(onSurfaceVariant, primary, animOffset.value)
         Row(
             modifier = Modifier.fillMaxHeight(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -211,9 +239,8 @@ fun LiquidSegmentedSlider(
             Text(
                 text = leftLabel,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected == NoteType.NOTE) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected == NoteType.NOTE) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (animOffset.value < 0.5f) FontWeight.Bold else FontWeight.Medium,
+                color = leftColor,
                 modifier = Modifier
                     .weight(1f)
                     .clickable(
@@ -233,9 +260,8 @@ fun LiquidSegmentedSlider(
             Text(
                 text = rightLabel,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected == NoteType.TODO) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected == NoteType.TODO) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (animOffset.value >= 0.5f) FontWeight.Bold else FontWeight.Medium,
+                color = rightColor,
                 modifier = Modifier
                     .weight(1f)
                     .clickable(
