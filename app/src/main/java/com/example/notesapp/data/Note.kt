@@ -11,6 +11,14 @@ data class Note(
     val content: String = "",
     val color: Int = 0,
     val isPinned: Boolean = false,
+    // 标签：逗号分隔字符串，如 "工作,灵感"。空串表示无标签。
+    val tags: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
-)
+) {
+    // 解析为标签列表（去空、去重，保持顺序）
+    val tagList: List<String>
+        get() = tags.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+}
