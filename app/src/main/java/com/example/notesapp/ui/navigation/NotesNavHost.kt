@@ -1,5 +1,8 @@
 package com.example.notesapp.ui.navigation
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -11,6 +14,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -35,6 +39,47 @@ private const val HOME_PARALLAX = 4
 
 private val fadeSpec = { tween<Float>(DURATION, easing = FastOutSlowInEasing) }
 
+// ===== 首页过渡（背景层）=====
+// 原则：进入二级页时向左视差退去，返回时从左视差回到原位——从哪退走就从哪回来。
+// enter（首次启动 / 新进入首页）：纯淡入，避免无来由的横向滑动
+private val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    fadeIn(fadeSpec())
+}
+// exit（前进离开，退为背景）：向左视差滑出 + 淡出
+private val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    fadeOut(fadeSpec()) +
+        slideOutHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX }
+}
+// popEnter（返回回到首页）：从左视差滑入 + 淡入（与 exit 镜像）
+private val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    fadeIn(fadeSpec()) +
+        slideInHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX }
+}
+// popExit（pop 离开首页）：与 exit 一致
+private val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    fadeOut(fadeSpec()) +
+        slideOutHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX }
+}
+
+// ===== 二级页面过渡（Editor / Settings 共用，前景层）=====
+// 原则：从右侧滑入覆盖首页，返回时向右滑出回到来处——从哪来回哪去。
+// enter（前进进入）：从右满屏滑入 + 淡入
+private val secondaryEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    slideInHorizontally(slideSpring) { fullWidth -> fullWidth } + fadeIn(fadeSpec())
+}
+// exit（前进离开到更深页，退为背景）：向左视差滑出 + 淡出
+private val secondaryExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    slideOutHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX } + fadeOut(fadeSpec())
+}
+// popEnter（返回回到二级页）：从左视差滑入 + 淡入（与 exit 镜像）
+private val secondaryPopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    slideInHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX } + fadeIn(fadeSpec())
+}
+// popExit（返回离开二级页）：向右满屏滑出 + 淡出（与 enter 镜像，从右来回右去）
+private val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    slideOutHorizontally(slideSpring) { fullWidth -> fullWidth } + fadeOut(fadeSpec())
+}
+
 @Composable
 fun NotesNavHost(
     navController: NavHostController,
@@ -49,21 +94,10 @@ fun NotesNavHost(
     ) {
         composable(
             route = Screen.Home.route,
-            // 首页进入：淡入 + 从左侧轻微滑入
-            enterTransition = {
-                fadeIn(fadeSpec()) +
-                    slideInHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX }
-            },
-            // 进入二级页时首页退出：淡出 + 向左轻微滑出（视差）
-            exitTransition = {
-                fadeOut(fadeSpec()) +
-                    slideOutHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX }
-            },
-            // pop 回首页：淡入 + 从左侧滑入
-            popEnterTransition = {
-                fadeIn(fadeSpec()) +
-                    slideInHorizontally(slideSpring) { fullWidth -> -fullWidth / HOME_PARALLAX }
-            }
+            enterTransition = homeEnter,
+            exitTransition = homeExit,
+            popEnterTransition = homePopEnter,
+            popExitTransition = homePopExit
         ) {
             HomeScreen(
                 viewModel = notesViewModel,
@@ -83,16 +117,10 @@ fun NotesNavHost(
         composable(
             route = Screen.Editor.route,
             arguments = listOf(navArgument("noteId") { type = NavType.LongType }),
-            // 进入编辑页：从右侧滑入 + 淡入
-            enterTransition = {
-                slideInHorizontally(slideSpring) { fullWidth -> fullWidth } +
-                    fadeIn(fadeSpec())
-            },
-            // 离开编辑页（返回首页）：向右滑出 + 淡出
-            popExitTransition = {
-                slideOutHorizontally(slideSpring) { fullWidth -> fullWidth } +
-                    fadeOut(fadeSpec())
-            }
+            enterTransition = secondaryEnter,
+            exitTransition = secondaryExit,
+            popEnterTransition = secondaryPopEnter,
+            popExitTransition = secondaryPopExit
         ) { backStackEntry ->
             val noteId = backStackEntry.arguments?.getLong("noteId") ?: 0L
             EditorScreen(
@@ -104,16 +132,10 @@ fun NotesNavHost(
 
         composable(
             route = Screen.Settings.route,
-            // 进入设置页：从右侧滑入 + 淡入
-            enterTransition = {
-                slideInHorizontally(slideSpring) { fullWidth -> fullWidth } +
-                    fadeIn(fadeSpec())
-            },
-            // 离开设置页（返回首页）：向右滑出 + 淡出
-            popExitTransition = {
-                slideOutHorizontally(slideSpring) { fullWidth -> fullWidth } +
-                    fadeOut(fadeSpec())
-            }
+            enterTransition = secondaryEnter,
+            exitTransition = secondaryExit,
+            popEnterTransition = secondaryPopEnter,
+            popExitTransition = secondaryPopExit
         ) {
             SettingsScreen(
                 viewModel = settingsViewModel,
