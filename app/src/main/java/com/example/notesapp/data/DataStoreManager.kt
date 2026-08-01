@@ -20,6 +20,7 @@ class DataStoreManager(private val context: Context) {
         val THEME_COLOR = stringPreferencesKey("theme_color")
         val CARD_RADIUS = intPreferencesKey("card_radius")
         val CARD_SHADOW = booleanPreferencesKey("card_shadow")
+        val BACKGROUND_URI = stringPreferencesKey("background_uri")
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
@@ -38,6 +39,11 @@ class DataStoreManager(private val context: Context) {
         prefs[CARD_SHADOW] ?: true
     }
 
+    // 自定义背景图 URI（字符串形式，null 表示使用默认纯色背景）
+    val backgroundUri: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[BACKGROUND_URI]
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { it[THEME_MODE] = mode.name }
     }
@@ -52,6 +58,12 @@ class DataStoreManager(private val context: Context) {
 
     suspend fun setCardShadow(enabled: Boolean) {
         context.dataStore.edit { it[CARD_SHADOW] = enabled }
+    }
+
+    suspend fun setBackgroundUri(uri: String?) {
+        context.dataStore.edit {
+            if (uri == null) it.remove(BACKGROUND_URI) else it[BACKGROUND_URI] = uri
+        }
     }
 }
 

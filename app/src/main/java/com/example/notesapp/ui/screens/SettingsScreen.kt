@@ -1,5 +1,8 @@
 package com.example.notesapp.ui.screens
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +62,8 @@ fun SettingsScreen(
     val themeColor by viewModel.themeColor.collectAsState()
     val cardRadius by viewModel.cardRadius.collectAsState()
     val cardShadow by viewModel.cardShadow.collectAsState()
+    val backgroundUri by viewModel.backgroundUri.collectAsState()
+    val context = LocalContext.current
     val isSystemDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
         ThemeMode.LIGHT -> false
@@ -225,6 +231,55 @@ fun SettingsScreen(
                     onClick = { viewModel.setCardShadow(true) }
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 自定义背景图：从图库选择图片作为全局背景，叠加遮罩保证可读性
+            SettingsSectionTitle(stringResource(R.string.custom_background))
+
+            // 图片选择器：使用 OpenDocument 获取持久化读权限，重启后仍可访问
+            val pickImageLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    viewModel.setBackgroundUri(uri.toString())
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ShadowOption(
+                    label = stringResource(R.string.background_pick_image),
+                    selected = backgroundUri != null,
+                    onClick = { pickImageLauncher.launch(arrayOf("image/*")) }
+                )
+                ShadowOption(
+                    label = stringResource(R.string.background_clear),
+                    selected = backgroundUri == null,
+                    onClick = { viewModel.setBackgroundUri(null) }
+                )
+            }
+
+            // 当前背景状态提示
+            Text(
+                text = if (backgroundUri != null) stringResource(R.string.background_set_hint)
+                else stringResource(R.string.background_default_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+            )
         }
     }
 }

@@ -26,6 +26,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
     val cardShadow: StateFlow<Boolean> = dataStoreManager.cardShadow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val backgroundUri: StateFlow<String?> = dataStoreManager.backgroundUri
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { dataStoreManager.setThemeMode(mode) }
     }
@@ -40,5 +43,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
 
     fun setCardShadow(enabled: Boolean) {
         viewModelScope.launch { dataStoreManager.setCardShadow(enabled) }
+    }
+
+    fun setBackgroundUri(uri: String?) {
+        viewModelScope.launch { dataStoreManager.setBackgroundUri(uri) }
     }
 }

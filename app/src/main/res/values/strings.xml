@@ -19,6 +19,11 @@
     <string name="shadow_flat">扁平</string>
     <string name="shadow_elevated">微阴影</string>
     <string name="preview">预览效果</string>
+    <string name="custom_background">自定义背景</string>
+    <string name="background_pick_image">选择图片</string>
+    <string name="background_clear">恢复默认</string>
+    <string name="background_set_hint">已设置自定义背景，背景图会作为全局底图显示</string>
+    <string name="background_default_hint">当前使用默认纯色背景</string>
     <string name="pin">置顶</string>
     <string name="unpin">取消置顶</string>
     <string name="share">分享</string>
