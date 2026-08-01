@@ -1,5 +1,6 @@
 package com.example.notesapp.ui.viewmodel
 
+import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.NoteRepository
 import com.example.notesapp.data.NoteType
+import com.example.notesapp.notification.NotificationScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +17,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
+class NotesViewModel(
+    private val repository: NoteRepository,
+    private val app: Application
+) : ViewModel() {
 
     companion object {
         const val ACTION_SEND = "android.intent.action.SEND"
@@ -68,6 +73,9 @@ class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
     fun saveNote(note: Note, onSaved: (Long) -> Unit = {}) {
         viewModelScope.launch {
             val id = repository.saveNote(note)
+            // 保存后调度或取消提醒闹钟
+            val savedNote = note.copy(id = id)
+            NotificationScheduler.schedule(app, savedNote)
             onSaved(id)
         }
     }
@@ -76,6 +84,8 @@ class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
     fun deleteNote(note: Note, onDeleted: () -> Unit = {}) {
         viewModelScope.launch {
             repository.moveToTrash(note)
+            // 移入回收站时取消提醒
+            NotificationScheduler.cancel(app, note.id)
             onDeleted()
         }
     }
@@ -84,6 +94,10 @@ class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
     fun undoDelete(note: Note) {
         viewModelScope.launch {
             repository.restoreFromTrash(note)
+            // 恢复时如果有未过期的提醒则重新调度
+            if (note.reminderAt > System.currentTimeMillis()) {
+                NotificationScheduler.schedule(app, note)
+            }
         }
     }
 
@@ -97,17 +111,23 @@ class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
     fun restoreFromTrash(note: Note) {
         viewModelScope.launch {
             repository.restoreFromTrash(note)
+            if (note.reminderAt > System.currentTimeMillis()) {
+                NotificationScheduler.schedule(app, note)
+            }
         }
     }
 
     fun permanentlyDelete(note: Note) {
         viewModelScope.launch {
             repository.deleteNote(note)
+            NotificationScheduler.cancel(app, note.id)
         }
     }
 
     fun clearTrashed() {
         viewModelScope.launch {
+            // 取消所有回收站笔记的提醒
+            trashedNotes.value.forEach { NotificationScheduler.cancel(app, it.id) }
             repository.clearTrashed()
         }
     }

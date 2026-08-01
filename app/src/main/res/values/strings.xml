@@ -51,4 +51,11 @@
     <string name="tab_note">备忘录</string>
     <string name="tab_todo">代办</string>
     <string name="todo_completed">代办已完成</string>
+    <!-- 提醒通知 -->
+    <string name="reminder">提醒</string>
+    <string name="set_reminder">设置提醒</string>
+    <string name="reminder_off">关闭提醒</string>
+    <string name="reminder_set_at">提醒已设至 %1$s</string>
+    <string name="reminder_canceled">提醒已取消</string>
+    <string name="notification_permission_denied">未授予通知权限，提醒可能无法显示</string>
 </resources>

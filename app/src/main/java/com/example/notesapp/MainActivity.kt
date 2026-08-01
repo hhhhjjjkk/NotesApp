@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
                 SettingsViewModel(dataStoreManager)
             }
             val notesViewModel: NotesViewModel = viewModel {
-                NotesViewModel(repository)
+                NotesViewModel(repository, app)
             }
 
             val themeMode by settingsViewModel.themeMode.collectAsState()

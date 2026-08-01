@@ -3,6 +3,8 @@ package com.example.notesapp
 import android.app.Application
 import com.example.notesapp.data.DataStoreManager
 import com.example.notesapp.data.NoteDatabase
+import com.example.notesapp.notification.NotificationHelper
+import com.example.notesapp.notification.NotificationScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,11 +21,21 @@ class NotesApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // 创建通知渠道
+        NotificationHelper.createChannel(this)
+
         // 后台预热数据库：在 IO 线程打开 SQLite 文件并完成 Room 代理初始化，
         // 避免首屏查询时才触发，造成 UI 卡顿。
         appScope.launch {
             runCatching {
-                NoteDatabase.getInstance(this@NotesApplication).openHelper.writableDatabase
+                val db = NoteDatabase.getInstance(this@NotesApplication)
+                db.openHelper.writableDatabase
+                // 恢复所有未触发的提醒闹钟
+                val now = System.currentTimeMillis()
+                val pendingNotes = db.noteDao().getNotesWithPendingReminders(now)
+                pendingNotes.forEach { note ->
+                    NotificationScheduler.schedule(this@NotesApplication, note)
+                }
             }
         }
     }

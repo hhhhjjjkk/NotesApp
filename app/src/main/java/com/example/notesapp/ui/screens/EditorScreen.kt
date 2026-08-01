@@ -1,7 +1,16 @@
 package com.example.notesapp.ui.screens
 
+import android.Manifest
+import android.app.AlarmManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,9 +27,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AlarmOn
+import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,9 +42,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,17 +56,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.notesapp.R
 import com.example.notesapp.data.Note
@@ -61,6 +78,10 @@ import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.noteCardColors
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +104,39 @@ fun EditorScreen(
     var showMarkdownHelp by remember { mutableStateOf(false) }
     val markdownHelpSheetState = rememberModalBottomSheetState()
 
+    // 提醒相关状态
+    var reminderAt by rememberSaveable { mutableStateOf(0L) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var pickedYear by remember { mutableStateOf(0) }
+    var pickedMonth by remember { mutableStateOf(0) }
+    var pickedDay by remember { mutableStateOf(0) }
+    val context = LocalContext.current
+
+    // 通知权限请求（Android 13+）
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            // 权限通过，继续弹出日期选择
+            showDatePicker = true
+        }
+    }
+
+    fun requestNotificationPermissionAndOpenPicker() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        showDatePicker = true
+    }
+
     LaunchedEffect(existingNote) {
         if (!noteLoaded) {
             existingNote?.let {
@@ -90,6 +144,7 @@ fun EditorScreen(
                 content = it.content
                 selectedColor = it.color
                 isPinned = it.isPinned
+                reminderAt = it.reminderAt
                 noteLoaded = true
             }
         }
@@ -110,6 +165,7 @@ fun EditorScreen(
             color = selectedColor,
             isPinned = isPinned,
             type = base.type,
+            reminderAt = reminderAt,
             updatedAt = System.currentTimeMillis()
         )
     }
@@ -125,7 +181,7 @@ fun EditorScreen(
 
     BackHandler { saveAndExit() }
 
-    LaunchedEffect(title, content, selectedColor, isPinned) {
+    LaunchedEffect(title, content, selectedColor, isPinned, reminderAt) {
         if (noteId != 0L) {
             delay(1500)
             val note = buildNote()
@@ -291,6 +347,23 @@ fun EditorScreen(
                         onColorSelected = { selectedColor = it.toArgb() },
                         modifier = Modifier.weight(1f)
                     )
+                    // 提醒闹钟按钮
+                    IconButton(onClick = {
+                        if (reminderAt > 0L) {
+                            // 已有提醒，再次点击取消
+                            reminderAt = 0L
+                        } else {
+                            requestNotificationPermissionAndOpenPicker()
+                        }
+                    }) {
+                        Icon(
+                            imageVector = if (reminderAt > 0L) Icons.Default.AlarmOn
+                            else Icons.Default.AlarmOff,
+                            contentDescription = stringResource(R.string.reminder),
+                            tint = if (reminderAt > 0L) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(onClick = { showMarkdownHelp = true }) {
                         Icon(
                             imageVector = Icons.Default.Info,
@@ -300,6 +373,101 @@ fun EditorScreen(
                     }
                 }
             }
+        }
+    }
+
+    // 提醒时间显示文本
+    val reminderText = if (reminderAt > 0L) {
+        SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(Date(reminderAt))
+    } else null
+
+    // 日期选择器（使用原生 DatePickerDialog）
+    if (showDatePicker) {
+        LaunchedEffect(showDatePicker) {
+            val cal = Calendar.getInstance()
+            android.app.DatePickerDialog(
+                context,
+                { _, year, month, day ->
+                    pickedYear = year
+                    pickedMonth = month
+                    pickedDay = day
+                    showDatePicker = false
+                    showTimePicker = true
+                },
+                cal.get(Calendar.YEAR),
+                cal.get(Calendar.MONTH),
+                cal.get(Calendar.DAY_OF_MONTH)
+            ).apply {
+                datePicker.minDate = System.currentTimeMillis()
+                setOnCancelListener { showDatePicker = false }
+            }.show()
+        }
+    }
+
+    // 时间选择器 Dialog（Compose Material3 TimePicker）
+    if (showTimePicker) {
+        val timeState = rememberTimePickerState(
+            initialHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
+            initialMinute = Calendar.getInstance().get(Calendar.MINUTE),
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text(stringResource(R.string.set_reminder)) },
+            text = {
+                Box(contentAlignment = Alignment.Center) {
+                    TimePicker(state = timeState)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val c = Calendar.getInstance()
+                    c.set(pickedYear, pickedMonth, pickedDay, timeState.hour, timeState.minute, 0)
+                    c.set(Calendar.MILLISECOND, 0)
+                    val target = c.timeInMillis
+                    if (target > System.currentTimeMillis()) {
+                        reminderAt = target
+                    }
+                    showTimePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    // 提醒状态显示行（当有提醒时在标题下方显示）
+    if (reminderAt > 0L) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.AlarmOn,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text(
+                text = "提醒：$reminderText",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "取消",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.clickable { reminderAt = 0L }
+            )
         }
     }
 

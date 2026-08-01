@@ -20,7 +20,9 @@ data class Note(
     // 是否在回收站中（软删除标记）
     val isTrashed: Boolean = false,
     // 移入回收站的时间戳，用于过期自动清理
-    val trashedAt: Long = 0L
+    val trashedAt: Long = 0L,
+    // 提醒时间戳（0L 表示无提醒）
+    val reminderAt: Long = 0L
 ) {
     // 解析为标签列表（去空、去重，保持顺序）
     val tagList: List<String>

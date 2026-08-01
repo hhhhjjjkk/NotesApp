@@ -7,9 +7,9 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-// version 升至 3：Note 实体新增 type / isTrashed / trashedAt 字段。
-// 通过显式 Migration(2, 3) 保留历史数据；fallbackToDestructiveMigration 仅作为兜底。
-@Database(entities = [Note::class], version = 3, exportSchema = false)
+// version 升至 4：Note 实体新增 reminderAt 字段。
+// 通过显式 Migration 保留历史数据；fallbackToDestructiveMigration 仅作为兜底。
+@Database(entities = [Note::class], version = 4, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
 
@@ -23,6 +23,13 @@ abstract class NoteDatabase : RoomDatabase() {
             }
         }
 
+        // v3 -> v4：新增 reminderAt 列
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN reminderAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: NoteDatabase? = null
 
@@ -33,7 +40,7 @@ abstract class NoteDatabase : RoomDatabase() {
                     NoteDatabase::class.java,
                     "notes_database.db"
                 )
-                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build().also {
                         INSTANCE = it

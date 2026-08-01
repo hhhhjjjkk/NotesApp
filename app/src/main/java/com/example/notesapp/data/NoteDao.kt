@@ -42,4 +42,8 @@ interface NoteDao {
     // 过期自动清理：删除移入回收站超过指定毫秒的笔记
     @Query("DELETE FROM notes WHERE isTrashed = 1 AND trashedAt > 0 AND trashedAt < :before")
     suspend fun clearTrashedBefore(before: Long)
+
+    // 查询所有未触发提醒的笔记（用于开机/启动后恢复闹钟调度）
+    @Query("SELECT * FROM notes WHERE isTrashed = 0 AND reminderAt > :now")
+    suspend fun getNotesWithPendingReminders(now: Long): List<Note>
 }
