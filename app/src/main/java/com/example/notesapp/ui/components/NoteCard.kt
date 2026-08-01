@@ -16,7 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.data.Note
+import com.example.notesapp.ui.theme.liquidGlassSurface
+import com.example.notesapp.ui.theme.rememberPressableGlassScale
 import com.example.notesapp.ui.theme.toNoteColor
+import androidx.compose.foundation.shape.RoundedCornerShape
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,15 +42,24 @@ fun NoteCard(
         MaterialTheme.colorScheme.onSurface
     }
 
+    val shape = RoundedCornerShape(radiusDp.dp)
+    // 液态玻璃按压形变：按下缩小，松开 spring 回弹
+    val (scaleModifier, interactionSource) = rememberPressableGlassScale(pressedScale = 0.97f)
+
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .then(scaleModifier)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onClick,
                 onLongClick = onLongClick
-            ),
+            )
+            // 叠加玻璃质感：顶部高光渐变 + 边缘亮线
+            .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 1.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(radiusDp.dp),
+        shape = shape,
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (shadowEnabled) 2.dp else 0.dp
         ),

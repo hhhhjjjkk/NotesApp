@@ -3,6 +3,7 @@ package com.example.notesapp.ui.screens
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -23,7 +25,6 @@ import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,8 +47,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -59,6 +62,8 @@ import com.example.notesapp.data.ThemeMode
 import com.example.notesapp.ui.components.EmptyState
 import com.example.notesapp.ui.components.NoteCard
 import com.example.notesapp.ui.components.SearchBar
+import com.example.notesapp.ui.theme.liquidGlassSurface
+import com.example.notesapp.ui.theme.rememberPressableGlassScale
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
@@ -118,13 +123,35 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddClick,
-                shape = CircleShape,
+            // 液态玻璃球 FAB：半透明强调色 + 径向高光 + 玻璃边缘 + 按压形变
+            val (scaleMod, interactionSource) = rememberPressableGlassScale(pressedScale = 0.88f)
+            val primary = MaterialTheme.colorScheme.primary
+            Box(
                 modifier = Modifier
                     .padding(16.dp)
-                    .shadow(6.dp, CircleShape),
-                containerColor = MaterialTheme.colorScheme.primary
+                    .size(56.dp)
+                    .then(scaleMod)
+                    .shadow(8.dp, CircleShape)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                primary.copy(alpha = 0.92f),
+                                primary.copy(alpha = 0.62f)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+                    .liquidGlassSurface(
+                        shape = CircleShape,
+                        isDark = isDark,
+                        borderWidth = 1.5.dp
+                    )
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = onAddClick
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
