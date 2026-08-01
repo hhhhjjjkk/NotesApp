@@ -57,9 +57,17 @@ fun NoteCard(
     onSwipeDelete: () -> Unit = {},
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
-    isSelected: Boolean = false
+    isSelected: Boolean = false,
+    transparency: Float = 0f
 ) {
-    val cardColor = note.color.toNoteColor(isDark)
+    val baseColor = note.color.toNoteColor(isDark)
+    // 透明度开关：transparency=0 完全不透明；>0 时降低 alpha，让背景图透过来
+    // 限制最大透明度 0.85，避免卡片内容不可读
+    val cardColor = if (transparency > 0f) {
+        baseColor.copy(alpha = (1f - transparency * 0.85f).coerceIn(0.15f, 1f))
+    } else {
+        baseColor
+    }
     val contentColor = if (cardColor.isDark()) {
         Color.White
     } else {

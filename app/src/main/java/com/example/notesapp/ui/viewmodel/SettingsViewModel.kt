@@ -32,6 +32,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
     val backgroundDim: StateFlow<Float> = dataStoreManager.backgroundDim
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0.55f)
 
+    val cardTransparency: StateFlow<Float> = dataStoreManager.cardTransparency
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0f)
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { dataStoreManager.setThemeMode(mode) }
     }
@@ -54,5 +57,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
 
     fun setBackgroundDim(dim: Float) {
         viewModelScope.launch { dataStoreManager.setBackgroundDim(dim) }
+    }
+
+    fun setCardTransparency(transparency: Float) {
+        viewModelScope.launch { dataStoreManager.setCardTransparency(transparency) }
     }
 }

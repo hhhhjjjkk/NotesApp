@@ -63,6 +63,7 @@ fun SettingsScreen(
     val themeColor by viewModel.themeColor.collectAsState()
     val cardRadius by viewModel.cardRadius.collectAsState()
     val cardShadow by viewModel.cardShadow.collectAsState()
+    val cardTransparency by viewModel.cardTransparency.collectAsState()
     val backgroundUri by viewModel.backgroundUri.collectAsState()
     val backgroundDim by viewModel.backgroundDim.collectAsState()
     val context = LocalContext.current
@@ -233,6 +234,46 @@ fun SettingsScreen(
                     onClick = { viewModel.setCardShadow(true) }
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 笔记卡片透明度：让自定义背景图透过卡片显示
+            SettingsSectionTitle(stringResource(R.string.card_transparency))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.card_transparency),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "${(cardTransparency * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Slider(
+                value = cardTransparency,
+                onValueChange = { viewModel.setCardTransparency(it) },
+                valueRange = 0f..1f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, top = 4.dp)
+            )
+            Text(
+                text = stringResource(R.string.card_transparency_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider()

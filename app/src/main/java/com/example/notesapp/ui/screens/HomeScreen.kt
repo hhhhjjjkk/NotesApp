@@ -97,6 +97,7 @@ fun HomeScreen(
     val themeMode by settingsViewModel.themeMode.collectAsState()
     val cardRadius by settingsViewModel.cardRadius.collectAsState()
     val cardShadow by settingsViewModel.cardShadow.collectAsState()
+    val cardTransparency by settingsViewModel.cardTransparency.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
         ThemeMode.LIGHT -> false
@@ -251,6 +252,7 @@ fun HomeScreen(
                             shadowEnabled = cardShadow,
                             selectionMode = selectionMode,
                             isSelected = note.id in selectedIds,
+                            transparency = cardTransparency,
                             onClick = {
                                 if (selectionMode) {
                                     selectedIds = if (note.id in selectedIds) {
@@ -370,10 +372,14 @@ fun HomeScreen(
                             selectedIds = emptySet()
                             selectionMode = false
                             scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    message = "已删除 $count 条笔记",
+                                val result = snackbarHostState.showSnackbar(
+                                    message = context.getString(R.string.notes_deleted, count),
+                                    actionLabel = context.getString(R.string.undo),
                                     duration = SnackbarDuration.Short
                                 )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    toDelete.forEach { viewModel.saveNote(it) }
+                                }
                             }
                         },
                     contentAlignment = Alignment.Center

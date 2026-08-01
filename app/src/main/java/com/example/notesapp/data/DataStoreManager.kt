@@ -23,6 +23,7 @@ class DataStoreManager(private val context: Context) {
         val CARD_SHADOW = booleanPreferencesKey("card_shadow")
         val BACKGROUND_URI = stringPreferencesKey("background_uri")
         val BACKGROUND_DIM = floatPreferencesKey("background_dim")
+        val CARD_TRANSPARENCY = floatPreferencesKey("card_transparency")
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
@@ -51,6 +52,11 @@ class DataStoreManager(private val context: Context) {
         (prefs[BACKGROUND_DIM] ?: 0.55f).coerceIn(0f, 1f)
     }
 
+    // 笔记卡片透明度 0f~1f（0=完全不透明；1=最大透明度，背景图可透过来）
+    val cardTransparency: Flow<Float> = context.dataStore.data.map { prefs ->
+        (prefs[CARD_TRANSPARENCY] ?: 0f).coerceIn(0f, 1f)
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { it[THEME_MODE] = mode.name }
     }
@@ -76,6 +82,12 @@ class DataStoreManager(private val context: Context) {
     suspend fun setBackgroundDim(dim: Float) {
         context.dataStore.edit {
             it[BACKGROUND_DIM] = dim.coerceIn(0f, 1f)
+        }
+    }
+
+    suspend fun setCardTransparency(transparency: Float) {
+        context.dataStore.edit {
+            it[CARD_TRANSPARENCY] = transparency.coerceIn(0f, 1f)
         }
     }
 }

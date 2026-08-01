@@ -26,11 +26,14 @@
     <string name="background_default_hint">当前使用默认纯色背景</string>
     <string name="background_opacity">背景遮罩强度</string>
     <string name="background_opacity_hint">数值越大背景图越淡、文字越清晰；越小背景图越突出</string>
+    <string name="card_transparency">笔记卡片透明度</string>
+    <string name="card_transparency_hint">数值越大卡片越透明，自定义背景图会透过卡片显示</string>
     <string name="pin">置顶</string>
     <string name="unpin">取消置顶</string>
     <string name="share">分享</string>
     <string name="delete">删除</string>
     <string name="undo">撤销</string>
     <string name="note_deleted">笔记已删除</string>
+    <string name="notes_deleted">已删除 %1$d 条笔记</string>
     <string name="save_error">保存失败</string>
 </resources>
