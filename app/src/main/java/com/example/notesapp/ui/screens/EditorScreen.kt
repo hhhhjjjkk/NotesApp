@@ -3,6 +3,8 @@ package com.example.notesapp.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -14,15 +16,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,12 +37,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,6 +73,8 @@ fun EditorScreen(
     var selectedColor by rememberSaveable { mutableStateOf(0) }
     var isPinned by rememberSaveable { mutableStateOf(false) }
     var noteLoaded by rememberSaveable { mutableStateOf(false) }
+    var showMarkdownHelp by remember { mutableStateOf(false) }
+    val markdownHelpSheetState = rememberModalBottomSheetState()
 
     LaunchedEffect(existingNote) {
         if (!noteLoaded) {
@@ -175,12 +185,26 @@ fun EditorScreen(
                     .padding(16.dp)
             ) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                ColorPicker(
-                    selectedColor = noteCardColors.find { it.toArgb() == selectedColor }
-                        ?: noteCardColors.first(),
-                    onColorSelected = { selectedColor = it.toArgb() },
-                    modifier = Modifier.padding(top = 12.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    ColorPicker(
+                        selectedColor = noteCardColors.find { it.toArgb() == selectedColor }
+                            ?: noteCardColors.first(),
+                        onColorSelected = { selectedColor = it.toArgb() },
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { showMarkdownHelp = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Markdown 语法",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     ) { padding ->
@@ -241,5 +265,65 @@ fun EditorScreen(
                 }
             )
         }
+    }
+
+    // Markdown 语法提示弹窗
+    if (showMarkdownHelp) {
+        ModalBottomSheet(
+            onDismissRequest = { showMarkdownHelp = false },
+            sheetState = markdownHelpSheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .padding(bottom = 24.dp)
+            ) {
+                Text(
+                    text = "Markdown 语法速查",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                MarkdownHelpItem("# 标题", "一级标题")
+                MarkdownHelpItem("## 小标题", "二级标题")
+                MarkdownHelpItem("- 列表项", "无序列表")
+                MarkdownHelpItem("1. 列表项", "有序列表")
+                MarkdownHelpItem("**加粗文本**", "加粗显示")
+                MarkdownHelpItem("*斜体文本*", "斜体显示")
+
+                Spacer(modifier = Modifier.padding(top = 16.dp))
+                Text(
+                    text = "提示：在首页卡片中会自动渲染这些语法。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownHelpItem(syntax: String, description: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        Text(
+            text = syntax,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
