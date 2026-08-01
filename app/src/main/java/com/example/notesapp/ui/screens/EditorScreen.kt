@@ -475,7 +475,8 @@ fun EditorScreen(
     if (showMarkdownHelp) {
         ModalBottomSheet(
             onDismissRequest = { showMarkdownHelp = false },
-            sheetState = markdownHelpSheetState
+            sheetState = markdownHelpSheetState,
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier

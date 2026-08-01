@@ -2,6 +2,7 @@ package com.example.notesapp.ui.screens
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -26,7 +27,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -185,65 +185,6 @@ fun HomeScreen(
             // FAB 已移到底部滑块同一 Row，避免与滑块重叠
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            AnimatedVisibility(
-                visible = !selectionMode,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    LiquidSegmentedSlider(
-                        selected = noteType,
-                        onSelected = { viewModel.setNoteType(it) },
-                        leftLabel = stringResource(R.string.tab_note),
-                        rightLabel = stringResource(R.string.tab_todo),
-                        isDark = isDark,
-                        modifier = Modifier.weight(1f)
-                    )
-                    val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)
-                    val primary = MaterialTheme.colorScheme.primary
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .then(scaleMod)
-                            .shadow(8.dp, CircleShape)
-                            .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        primary.copy(alpha = 0.92f),
-                                        primary.copy(alpha = 0.62f)
-                                    )
-                                ),
-                                shape = CircleShape
-                            )
-                            .liquidGlassSurface(
-                                shape = CircleShape,
-                                isDark = isDark,
-                                borderWidth = 1.5.dp
-                            )
-                            .clickable(
-                                interactionSource = fabSrc,
-                                indication = null,
-                                onClick = onAddClick
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = stringResource(R.string.new_note),
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-            }
-        },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(
@@ -332,11 +273,83 @@ fun HomeScreen(
                 }
             }
 
+            // 底部滑块 + 添加按钮：直接锚定到内容 Box 底部，无外层包裹
+            AnimatedVisibility(
+                visible = !selectionMode,
+                enter = slideInVertically(
+                    animationSpec = tween(350),
+                    initialOffsetY = { it }
+                ) + fadeIn(animationSpec = tween(350)),
+                exit = slideOutVertically(
+                    animationSpec = tween(300),
+                    targetOffsetY = { it }
+                ) + fadeOut(animationSpec = tween(300)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    LiquidSegmentedSlider(
+                        selected = noteType,
+                        onSelected = { viewModel.setNoteType(it) },
+                        leftLabel = stringResource(R.string.tab_note),
+                        rightLabel = stringResource(R.string.tab_todo),
+                        isDark = isDark,
+                        modifier = Modifier.weight(1f)
+                    )
+                    val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)
+                    val primary = MaterialTheme.colorScheme.primary
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .then(scaleMod)
+                            .shadow(8.dp, CircleShape)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        primary.copy(alpha = 0.92f),
+                                        primary.copy(alpha = 0.62f)
+                                    )
+                                ),
+                                shape = CircleShape
+                            )
+                            .liquidGlassSurface(
+                                shape = CircleShape,
+                                isDark = isDark,
+                                borderWidth = 1.5.dp
+                            )
+                            .clickable(
+                                interactionSource = fabSrc,
+                                indication = null,
+                                onClick = onAddClick
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.new_note),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+
             // 多选模式下的底部悬浮删除栏：锚定到 Box 底部，圆角玻璃卡片
             AnimatedVisibility(
                 visible = selectionMode && selectedIds.isNotEmpty(),
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                enter = slideInVertically(
+                    animationSpec = tween(350),
+                    initialOffsetY = { it }
+                ) + fadeIn(animationSpec = tween(350)),
+                exit = slideOutVertically(
+                    animationSpec = tween(300),
+                    targetOffsetY = { it }
+                ) + fadeOut(animationSpec = tween(300)),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 Row(

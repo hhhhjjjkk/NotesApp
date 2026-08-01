@@ -54,26 +54,34 @@ fun NotesAppTheme(
 ) {
     val accent = themeColor.toComposeColor()
     val hasCustomBackground = !backgroundUri.isNullOrBlank()
-    // 有自定义背景时，background 改为半透明遮罩色，让背景图透过 Scaffold 显示
+    // 有自定义背景时，background 和 surface 都改为半透明遮罩色，让背景图透过 Scaffold 显示
     val resolvedBackground = resolveBackgroundColor(hasCustomBackground, darkTheme, backgroundDim)
+    // surface 比 background 略不透明，保留层次感但避免色差过大
+    val resolvedSurface = if (hasCustomBackground) {
+        resolveBackgroundColor(hasCustomBackground, darkTheme, (backgroundDim + 0.08f).coerceAtMost(0.92f))
+    } else {
+        resolvedBackground
+    }
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             (if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context))
-                .copy(background = resolvedBackground)
+                .copy(background = resolvedBackground, surface = resolvedSurface)
         }
 
         darkTheme -> DarkColorScheme.copy(
             primary = accent,
             secondary = accent,
             tertiary = accent,
-            background = resolvedBackground
+            background = resolvedBackground,
+            surface = resolvedSurface
         )
         else -> LightColorScheme.copy(
             primary = accent,
             secondary = accent,
             tertiary = accent,
-            background = resolvedBackground
+            background = resolvedBackground,
+            surface = resolvedSurface
         )
     }
 

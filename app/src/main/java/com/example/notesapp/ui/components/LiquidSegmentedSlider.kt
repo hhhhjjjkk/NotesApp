@@ -283,6 +283,6 @@ fun LiquidSegmentedSlider(
 }
 
 private val springSpec = spring<Float>(
-    dampingRatio = Spring.DampingRatioMediumBouncy,
-    stiffness = Spring.StiffnessMediumLow
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessMedium
 )

@@ -27,12 +27,12 @@ import com.example.notesapp.ui.screens.TrashScreen
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
-private const val DURATION = 320
+private const val DURATION = 400
 
-// 滑动用 spring：基于物理模型，被打断时会从当前位置/速度平滑继续，不会跳变
+// 滑动用 spring：低弹力 + 中等刚度，过渡更柔和自然
 private val slideSpring = spring<IntOffset>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = Spring.StiffnessMediumLow
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessMedium
 )
 
 // 首页位移比例（视差效果）
