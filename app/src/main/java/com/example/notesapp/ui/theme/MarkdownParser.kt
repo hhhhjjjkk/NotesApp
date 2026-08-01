@@ -57,9 +57,19 @@ fun parseInlineMarkdown(text: String): AnnotatedString {
 
 /**
  * 将完整的 Markdown 文本解析为一组语义化的块。
+ * 加 try-catch 容错：任何解析异常都降级为纯文本段落，绝不让 UI 崩溃。
  */
 fun parseMarkdown(text: String): List<MarkdownBlock> {
     if (text.isBlank()) return emptyList()
+    return try {
+        parseMarkdownInternal(text)
+    } catch (e: Exception) {
+        // 降级：把整段作为普通段落返回
+        listOf(MarkdownBlock.Paragraph(AnnotatedString(text)))
+    }
+}
+
+private fun parseMarkdownInternal(text: String): List<MarkdownBlock> {
 
     val lines = text.lines()
     val blocks = mutableListOf<MarkdownBlock>()
