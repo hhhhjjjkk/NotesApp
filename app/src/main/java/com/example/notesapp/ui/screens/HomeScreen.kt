@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,8 +20,10 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
@@ -98,23 +101,49 @@ fun HomeScreen(
     var sheetNote by remember { mutableStateOf<Note?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // 多选删除模式
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.app_name),
+                        text = if (selectionMode) "已选 ${selectedIds.size} 项"
+                        else stringResource(R.string.app_name),
                         style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Medium),
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 },
                 actions = {
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = stringResource(R.string.settings),
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
+                    if (selectionMode) {
+                        // 退出选择模式
+                        IconButton(onClick = {
+                            selectionMode = false
+                            selectedIds = emptySet()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "取消"
+                            )
+                        }
+                    } else {
+                        // 进入编辑/选择模式
+                        IconButton(onClick = { selectionMode = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "编辑",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.settings),
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -197,12 +226,81 @@ fun HomeScreen(
                             isDark = isDark,
                             radiusDp = cardRadius,
                             shadowEnabled = cardShadow,
-                            onClick = { onNoteClick(note.id) },
+                            selectionMode = selectionMode,
+                            isSelected = note.id in selectedIds,
+                            onClick = {
+                                if (selectionMode) {
+                                    selectedIds = if (note.id in selectedIds) {
+                                        selectedIds - note.id
+                                    } else {
+                                        selectedIds + note.id
+                                    }
+                                } else {
+                                    onNoteClick(note.id)
+                                }
+                            },
                             onLongClick = {
                                 sheetNote = note
                                 scope.launch { sheetState.show() }
                             },
                             modifier = Modifier.animateItemPlacement()
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 多选模式下的底部删除栏
+    if (selectionMode && selectedIds.isNotEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(8.dp, androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+                    .background(
+                        MaterialTheme.colorScheme.surface,
+                        androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+                    )
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "已选 ${selectedIds.size} 项",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { selectedIds = emptySet() }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "清空选择",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = {
+                        val toDelete = notes.filter { it.id in selectedIds }
+                        toDelete.forEach { viewModel.deleteNote(it) }
+                        val count = toDelete.size
+                        selectedIds = emptySet()
+                        selectionMode = false
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "已删除 $count 条笔记",
+                                duration = SnackbarDuration.Short
+                            )
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "删除",
+                            tint = MaterialTheme.colorScheme.error
                         )
                     }
                 }

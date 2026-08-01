@@ -3,12 +3,19 @@ package com.example.notesapp.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,7 +45,9 @@ fun NoteCard(
     shadowEnabled: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false
 ) {
     val cardColor = note.color.toNoteColor(isDark)
     val contentColor = if (cardColor.isDark()) {
@@ -66,33 +75,51 @@ fun NoteCard(
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (shadowEnabled) 2.dp else 0.dp
         ),
-        border = if (!shadowEnabled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
+        // 选中态用强调色描边，否则按原逻辑
+        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        else if (!shadowEnabled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            if (note.title.isNotBlank()) {
+        Box {
+            Column(modifier = Modifier.padding(16.dp)) {
+                if (note.title.isNotBlank()) {
+                    Text(
+                        text = note.title,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = contentColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (note.content.isNotBlank()) {
+                    val markdownBlocks = parseMarkdown(note.content)
+                    MarkdownRenderer(
+                        blocks = markdownBlocks,
+                        textColor = contentColor.copy(alpha = 0.85f),
+                        modifier = Modifier.padding(top = if (note.title.isNotBlank()) 6.dp else 0.dp),
+                        maxLines = 6
+                    )
+                }
                 Text(
-                    text = note.title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = contentColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    text = formatDate(note.updatedAt),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = contentColor.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
-            if (note.content.isNotBlank()) {
-                val markdownBlocks = parseMarkdown(note.content)
-                MarkdownRenderer(
-                    blocks = markdownBlocks,
-                    textColor = contentColor.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(top = if (note.title.isNotBlank()) 6.dp else 0.dp),
-                    maxLines = 6
+
+            // 选择模式下右上角显示勾选圈
+            if (selectionMode) {
+                Icon(
+                    imageVector = if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                    contentDescription = null,
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.TopEnd)
+                        .padding(10.dp)
+                        .size(24.dp)
                 )
             }
-            Text(
-                text = formatDate(note.updatedAt),
-                style = MaterialTheme.typography.bodyMedium,
-                color = contentColor.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 8.dp)
-            )
         }
     }
 }
