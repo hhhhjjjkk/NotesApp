@@ -26,14 +26,19 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import com.example.notesapp.data.Note
 import com.example.notesapp.ui.theme.MarkdownBlock
 import com.example.notesapp.ui.theme.liquidGlassSurface
@@ -96,9 +101,17 @@ fun NoteCard(
         enableDismissFromEndToStart = !selectionMode,
         backgroundContent = {
             // 红色删除背景跟随滑动进度渐变：
-            // 不滑动时 progress=0，背景完全透明，透出自定义壁纸
-            // 滑动时 progress 增大，红色与删除图标渐进显现
-            val progress = dismissState.progress
+            // 直接读取 dismissState 的像素偏移自己计算进度，确保静止时 progress=0、
+            // 背景完全透明，从而透过卡片显示自定义壁纸；滑动时红色渐进显现。
+            val density = LocalDensity.current
+            val progress by remember {
+                derivedStateOf {
+                    // requireOffset 在未 layout 时可能抛异常，安全降级为 0
+                    val off = runCatching { dismissState.requireOffset() }.getOrDefault(0f)
+                    val maxPx = with(density) { 160.dp.toPx() }
+                    (abs(off) / maxPx).coerceIn(0f, 1f)
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
