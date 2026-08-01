@@ -95,18 +95,24 @@ fun NoteCard(
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = !selectionMode,
         backgroundContent = {
+            // 红色删除背景跟随滑动进度渐变：
+            // 不滑动时 progress=0，背景完全透明，透出自定义壁纸
+            // 滑动时 progress 增大，红色与删除图标渐进显现
+            val progress = dismissState.progress
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(shape)
-                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .background(
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = progress)
+                    )
                     .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer
+                    tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = progress)
                 )
             }
         }
