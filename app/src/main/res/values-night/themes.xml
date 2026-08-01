@@ -1,7 +1,16 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+
     <style name="Theme.NotesApp" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+
+    <!-- 启动主题（深色）：背景色与深色模式背景一致 -->
+    <style name="Theme.NotesApp.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launch_background_dark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.NotesApp</item>
+    </style>
+
 </resources>

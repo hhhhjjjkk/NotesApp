@@ -72,6 +72,9 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
+    // SplashScreen（消除冷启动白屏，适配 Android 12+）
+    implementation(libs.androidx.core.splashscreen)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

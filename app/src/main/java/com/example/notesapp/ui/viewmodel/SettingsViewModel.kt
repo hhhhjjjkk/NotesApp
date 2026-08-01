@@ -12,17 +12,19 @@ import kotlinx.coroutines.launch
 
 class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewModel() {
 
+    // 启动时主题信息直接影响首帧配色，使用 Eagerly 让 Flow 在 ViewModel 创建时
+    // 立即开始收集 DataStore，避免首屏先渲染默认色再闪烁切换。
     val themeMode: StateFlow<ThemeMode> = dataStoreManager.themeMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.SYSTEM)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.SYSTEM)
 
     val themeColor: StateFlow<ThemeColor> = dataStoreManager.themeColor
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeColor.ANDROID_BLUE)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeColor.ANDROID_BLUE)
 
     val cardRadius: StateFlow<Int> = dataStoreManager.cardRadius
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 12)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 12)
 
     val cardShadow: StateFlow<Boolean> = dataStoreManager.cardShadow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { dataStoreManager.setThemeMode(mode) }

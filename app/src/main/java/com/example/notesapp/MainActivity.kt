@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.example.notesapp.data.NoteDatabase
@@ -19,12 +20,16 @@ import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 必须在 super.onCreate 之前安装，以便正确替换启动主题
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val database = NoteDatabase.getInstance(applicationContext)
-        val repository = NoteRepository(database.noteDao())
-        val dataStoreManager = (application as NotesApplication).dataStoreManager
+        // 延迟创建数据库与仓库：使用 by lazy 避免主线程在 onCreate 阶段同步触发
+        // Room 的代理初始化和 SQLite 打开操作，将真正的 IO 推迟到 ViewModel 使用时。
+        val app = application as NotesApplication
+        val dataStoreManager = app.dataStoreManager
+        val repository by lazy { NoteRepository(NoteDatabase.getInstance(app).noteDao()) }
 
         setContent {
             val settingsViewModel: SettingsViewModel = viewModel {

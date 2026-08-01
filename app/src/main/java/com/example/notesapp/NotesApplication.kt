@@ -9,18 +9,22 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class NotesApplication : Application() {
-    lateinit var dataStoreManager: DataStoreManager
-        private set
+
+    // DataStoreManager 延迟初始化：避免 Application.onCreate 阶段同步构造，
+    // 真正的 Preferences 文件读取发生在首次 collect 时（异步）。
+    val dataStoreManager: DataStoreManager by lazy { DataStoreManager(this) }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
-        dataStoreManager = DataStoreManager(this)
 
-        // 后台预热数据库，避免首次查询卡顿
+        // 后台预热数据库：在 IO 线程打开 SQLite 文件并完成 Room 代理初始化，
+        // 避免首屏查询时才触发，造成 UI 卡顿。
         appScope.launch {
-            NoteDatabase.getInstance(this@NotesApplication).openHelper.writableDatabase
+            runCatching {
+                NoteDatabase.getInstance(this@NotesApplication).openHelper.writableDatabase
+            }
         }
     }
 }
