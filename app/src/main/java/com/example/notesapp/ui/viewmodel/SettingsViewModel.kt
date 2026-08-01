@@ -29,6 +29,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
     val backgroundUri: StateFlow<String?> = dataStoreManager.backgroundUri
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    val backgroundDim: StateFlow<Float> = dataStoreManager.backgroundDim
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0.55f)
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { dataStoreManager.setThemeMode(mode) }
     }
@@ -47,5 +50,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
 
     fun setBackgroundUri(uri: String?) {
         viewModelScope.launch { dataStoreManager.setBackgroundUri(uri) }
+    }
+
+    fun setBackgroundDim(dim: Float) {
+        viewModelScope.launch { dataStoreManager.setBackgroundDim(dim) }
     }
 }

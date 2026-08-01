@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -63,6 +64,7 @@ fun SettingsScreen(
     val cardRadius by viewModel.cardRadius.collectAsState()
     val cardShadow by viewModel.cardShadow.collectAsState()
     val backgroundUri by viewModel.backgroundUri.collectAsState()
+    val backgroundDim by viewModel.backgroundDim.collectAsState()
     val context = LocalContext.current
     val isSystemDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
@@ -280,6 +282,44 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp, top = 4.dp)
             )
+
+            // 背景透明度滑块：仅在有自定义背景时显示
+            if (backgroundUri != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(R.string.background_opacity),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "${(backgroundDim * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Slider(
+                    value = backgroundDim,
+                    onValueChange = { viewModel.setBackgroundDim(it) },
+                    valueRange = 0f..1f,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 4.dp, top = 4.dp)
+                )
+                Text(
+                    text = stringResource(R.string.background_opacity_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                )
+            }
         }
     }
 }

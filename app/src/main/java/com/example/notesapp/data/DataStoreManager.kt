@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -21,6 +22,7 @@ class DataStoreManager(private val context: Context) {
         val CARD_RADIUS = intPreferencesKey("card_radius")
         val CARD_SHADOW = booleanPreferencesKey("card_shadow")
         val BACKGROUND_URI = stringPreferencesKey("background_uri")
+        val BACKGROUND_DIM = floatPreferencesKey("background_dim")
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
@@ -44,6 +46,11 @@ class DataStoreManager(private val context: Context) {
         prefs[BACKGROUND_URI]
     }
 
+    // 背景遮罩强度 0f~1f（0=无遮罩，背景图最清晰；1=完全遮挡）
+    val backgroundDim: Flow<Float> = context.dataStore.data.map { prefs ->
+        (prefs[BACKGROUND_DIM] ?: 0.55f).coerceIn(0f, 1f)
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { it[THEME_MODE] = mode.name }
     }
@@ -63,6 +70,12 @@ class DataStoreManager(private val context: Context) {
     suspend fun setBackgroundUri(uri: String?) {
         context.dataStore.edit {
             if (uri == null) it.remove(BACKGROUND_URI) else it[BACKGROUND_URI] = uri
+        }
+    }
+
+    suspend fun setBackgroundDim(dim: Float) {
+        context.dataStore.edit {
+            it[BACKGROUND_DIM] = dim.coerceIn(0f, 1f)
         }
     }
 }

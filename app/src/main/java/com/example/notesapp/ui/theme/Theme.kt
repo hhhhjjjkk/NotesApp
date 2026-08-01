@@ -43,6 +43,7 @@ fun NotesAppTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     themeColor: ThemeColor = ThemeColor.ANDROID_BLUE,
     backgroundUri: String? = null,
+    backgroundDim: Float = 0.55f,
     darkTheme: Boolean = when (themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
@@ -54,7 +55,7 @@ fun NotesAppTheme(
     val accent = themeColor.toComposeColor()
     val hasCustomBackground = !backgroundUri.isNullOrBlank()
     // 有自定义背景时，background 改为半透明遮罩色，让背景图透过 Scaffold 显示
-    val resolvedBackground = resolveBackgroundColor(hasCustomBackground, darkTheme)
+    val resolvedBackground = resolveBackgroundColor(hasCustomBackground, darkTheme, backgroundDim)
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -99,12 +100,14 @@ fun NotesAppTheme(
     darkTheme: Boolean,
     themeColor: ThemeColor = ThemeColor.ANDROID_BLUE,
     backgroundUri: String? = null,
+    backgroundDim: Float = 0.55f,
     content: @Composable () -> Unit
 ) {
     NotesAppTheme(
         themeMode = if (darkTheme) ThemeMode.DARK else ThemeMode.LIGHT,
         themeColor = themeColor,
         backgroundUri = backgroundUri,
+        backgroundDim = backgroundDim,
         content = content
     )
 }

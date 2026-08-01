@@ -28,6 +28,7 @@ import kotlinx.coroutines.withContext
  * - 传入 URI 时加载图片并以 ContentScale.Crop 铺满屏幕
  * - 叠加半透明遮罩（scrim）保证上层文字可读性
  * - 明色模式用白雾遮罩，暗色模式用黑雾遮罩
+ * - [dim] 控制遮罩强度（0f=无遮罩，背景图最清晰；1f=完全遮挡）
  * - 加载大图时按目标像素降采样，避免 OOM
  * - URI 为空时渲染纯背景色，行为与默认一致
  */
@@ -35,6 +36,7 @@ import kotlinx.coroutines.withContext
 fun AppBackground(
     uri: String?,
     isDark: Boolean,
+    dim: Float = 0.55f,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -54,13 +56,13 @@ fun AppBackground(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            // 遮罩：让背景图柔化，确保上层内容可读
+            // 遮罩：让背景图柔化，确保上层内容可读。强度由 dim 控制。
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
-                        if (isDark) Color.Black.copy(alpha = 0.55f)
-                        else Color.White.copy(alpha = 0.65f)
+                        if (isDark) Color.Black.copy(alpha = dim)
+                        else Color.White.copy(alpha = dim)
                     )
             )
         } else {
@@ -78,10 +80,12 @@ fun AppBackground(
  * 为 [NotesAppTheme] 计算实际 `background` 配色：
  * - 有自定义背景时使用半透明遮罩色，让背景图透过 Scaffold 的 containerColor 显示
  * - 无自定义背景时使用默认不透明背景色
+ *
+ * [dim] 为遮罩强度，需与 [AppBackground] 传入的值保持一致，避免视觉错位。
  */
-fun resolveBackgroundColor(hasCustomBackground: Boolean, isDark: Boolean): Color =
+fun resolveBackgroundColor(hasCustomBackground: Boolean, isDark: Boolean, dim: Float = 0.55f): Color =
     if (hasCustomBackground) {
-        if (isDark) Color.Black.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.65f)
+        if (isDark) Color.Black.copy(alpha = dim) else Color.White.copy(alpha = dim)
     } else {
         MaterialThemeDefaults.backgroundColor(isDark)
     }

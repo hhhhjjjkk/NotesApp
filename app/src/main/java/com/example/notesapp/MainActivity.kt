@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
             val themeMode by settingsViewModel.themeMode.collectAsState()
             val themeColor by settingsViewModel.themeColor.collectAsState()
             val backgroundUri by settingsViewModel.backgroundUri.collectAsState()
+            val backgroundDim by settingsViewModel.backgroundDim.collectAsState()
             val darkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
@@ -54,11 +55,12 @@ class MainActivity : ComponentActivity() {
             NotesAppTheme(
                 darkTheme = darkTheme,
                 themeColor = themeColor,
-                backgroundUri = backgroundUri
+                backgroundUri = backgroundUri,
+                backgroundDim = backgroundDim
             ) {
                 Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
                     // 自定义背景层：图片 + 遮罩，铺满屏幕
-                    AppBackground(uri = backgroundUri, isDark = darkTheme)
+                    AppBackground(uri = backgroundUri, isDark = darkTheme, dim = backgroundDim)
                     val navController = rememberNavController()
                     NotesNavHost(
                         navController = navController,
