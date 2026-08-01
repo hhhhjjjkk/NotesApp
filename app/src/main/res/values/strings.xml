@@ -50,4 +50,5 @@
     <!-- 首页底部滑块 -->
     <string name="tab_note">备忘录</string>
     <string name="tab_todo">代办</string>
+    <string name="todo_completed">代办已完成</string>
 </resources>

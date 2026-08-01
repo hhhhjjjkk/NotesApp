@@ -183,47 +183,7 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            if (selectionMode) {
-                // 选择模式下隐藏 FAB，避免误触新增
-                Box {}
-            } else {
-                // 液态玻璃球 FAB：半透明强调色 + 径向高光 + 玻璃边缘 + 按压形变
-                val (scaleMod, interactionSource) = rememberPressableGlassScale(pressedScale = 0.88f)
-                val primary = MaterialTheme.colorScheme.primary
-                Box(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .size(56.dp)
-                        .then(scaleMod)
-                        .shadow(8.dp, CircleShape)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    primary.copy(alpha = 0.92f),
-                                    primary.copy(alpha = 0.62f)
-                                )
-                            ),
-                            shape = CircleShape
-                        )
-                        .liquidGlassSurface(
-                            shape = CircleShape,
-                            isDark = isDark,
-                            borderWidth = 1.5.dp
-                        )
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = onAddClick
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.new_note),
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
+            // FAB 已移到底部滑块同一 Row，避免与滑块重叠
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
@@ -291,6 +251,20 @@ fun HomeScreen(
                                     )
                                     if (result == SnackbarResult.ActionPerformed) {
                                         viewModel.undoDelete(deletedNote)
+                                    }
+                                }
+                            },
+                            onComplete = {
+                                val completedNote = note
+                                viewModel.deleteNote(completedNote)
+                                scope.launch {
+                                    val result = snackbarHostState.showSnackbar(
+                                        message = context.getString(R.string.todo_completed),
+                                        actionLabel = context.getString(R.string.undo),
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        viewModel.undoDelete(completedNote)
                                     }
                                 }
                             },
@@ -406,7 +380,7 @@ fun HomeScreen(
         }
     }
 
-    // 底部液态玻璃分段滑块：左备忘录 / 右代办，实时跟手渲染。
+    // 底部液态玻璃分段滑块 + 添加按钮：放在同一 Row，避免重叠。
     // 选择模式下隐藏，避免与底部悬浮删除栏重叠。
     AnimatedVisibility(
         visible = !selectionMode,
@@ -414,17 +388,58 @@ fun HomeScreen(
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter)
     ) {
-        LiquidSegmentedSlider(
-            selected = noteType,
-            onSelected = { viewModel.setNoteType(it) },
-            leftLabel = stringResource(R.string.tab_note),
-            rightLabel = stringResource(R.string.tab_todo),
-            isDark = isDark,
+        Row(
             modifier = Modifier
-                .fillMaxWidth(0.62f)
+                .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(bottom = 24.dp)
-        )
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            LiquidSegmentedSlider(
+                selected = noteType,
+                onSelected = { viewModel.setNoteType(it) },
+                leftLabel = stringResource(R.string.tab_note),
+                rightLabel = stringResource(R.string.tab_todo),
+                isDark = isDark,
+                modifier = Modifier.weight(1f)
+            )
+            // 添加按钮：液态玻璃球，与滑块并排
+            val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)
+            val primary = MaterialTheme.colorScheme.primary
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .then(scaleMod)
+                    .shadow(8.dp, CircleShape)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                primary.copy(alpha = 0.92f),
+                                primary.copy(alpha = 0.62f)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+                    .liquidGlassSurface(
+                        shape = CircleShape,
+                        isDark = isDark,
+                        borderWidth = 1.5.dp
+                    )
+                    .clickable(
+                        interactionSource = fabSrc,
+                        indication = null,
+                        onClick = onAddClick
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.new_note),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
     }
     } // 关闭外层 Box
 

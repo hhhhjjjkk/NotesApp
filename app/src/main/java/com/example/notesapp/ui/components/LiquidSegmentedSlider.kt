@@ -3,7 +3,7 @@ package com.example.notesapp.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -40,20 +41,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.data.NoteType
-import com.example.notesapp.ui.theme.glassBorder
-import com.example.notesapp.ui.theme.glassHighlight
-import com.example.notesapp.ui.theme.glassOverlayColor
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
  * 液态玻璃分段滑块。
  *
- * 设计要点：
- * - 胶囊形容器 + 内部可滑动的液态玻璃"滑块"，左侧标签"备忘录"、右侧"代办"
- * - 滑块跟手实时渲染：拖动时直接 snapTo 偏移，松手后 spring 物理回弹归位
- * - 滑块本身为半透明玻璃材质（径向高光 + 顶部高光渐变 + 边缘描边 + 阴影）
- * - 点击左右文字亦可切换，提升可用性
+ * 玻璃质感实现要点（避免"塑料感"）：
+ * - 轨道（track）做凹陷：顶部内阴影 + 底部内高光，形成下凹的容纳槽
+ * - 滑块（thumb）做凸起：顶部窄高光（镜面反射）+ 底部柔阴影 + 边缘亮线 + 软投影
+ * - 全部用 drawBehind 绘制在内容之下，半透明叠加让背景透出，而非不透明色块
+ * - 拖动跟手 snapTo，松手 spring 物理回弹
  *
  * @param selected 当前选中类型，[NoteType.NOTE] 或 [NoteType.TODO]
  * @param onSelected 类型切换回调
@@ -88,13 +86,38 @@ fun LiquidSegmentedSlider(
         }
     }
 
+    // 轨道（凹陷玻璃槽）配色
+    val trackBase = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.16f)
+    val trackTopShadow = if (isDark) Color.Black.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.07f)
+    val trackBottomLight = if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.20f)
+    val trackEdge = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.22f)
+
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
             .clip(CircleShape)
-            .background(glassOverlayColor(isDark).copy(alpha = if (isDark) 0.10f else 0.22f))
-            .glassHighlight(CircleShape, isDark)
-            .glassBorder(CircleShape, isDark, 1.dp)
+            .drawBehind {
+                val h = size.height
+                // 基础底色
+                drawRect(trackBase)
+                // 顶部内阴影：凹陷感
+                drawRect(
+                    Brush.verticalGradient(
+                        colors = listOf(trackTopShadow, Color.Transparent),
+                        startY = 0f,
+                        endY = h * 0.22f
+                    )
+                )
+                // 底部内高光：反光
+                drawRect(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, trackBottomLight),
+                        startY = h * 0.65f,
+                        endY = h
+                    )
+                )
+            }
+            .border(width = 1.dp, color = trackEdge, shape = CircleShape)
             .onSizeChanged { widthPx = it.width.toFloat() }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
@@ -128,6 +151,13 @@ fun LiquidSegmentedSlider(
         val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
         val thumbOffsetPx = animOffset.value * thumbWidthPx
 
+        // 滑块（凸起玻璃）配色
+        val thumbTop = if (isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.55f)
+        val thumbBottom = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.26f)
+        val thumbSpecular = if (isDark) Color.White.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.80f)
+        val thumbShade = if (isDark) Color.Black.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.06f)
+        val thumbEdge = if (isDark) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.62f)
+
         // 滑块：液态玻璃材质，随手指实时位移
         Box(
             modifier = Modifier
@@ -136,22 +166,40 @@ fun LiquidSegmentedSlider(
                 .width(thumbWidthDp)
                 .fillMaxHeight()
                 .shadow(
-                    elevation = 4.dp,
+                    elevation = 5.dp,
                     shape = CircleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.15f),
-                    spotColor = Color.Black.copy(alpha = 0.25f)
+                    ambientColor = Color.Black.copy(alpha = 0.10f),
+                    spotColor = Color.Black.copy(alpha = 0.18f)
                 )
                 .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = if (isDark) 0.22f else 0.65f),
-                            Color.White.copy(alpha = if (isDark) 0.10f else 0.40f)
+                .drawBehind {
+                    val h = size.height
+                    // 基础渐变：上亮下暗，模拟玻璃受光
+                    drawRect(
+                        Brush.verticalGradient(
+                            colors = listOf(thumbTop, thumbBottom),
+                            startY = 0f,
+                            endY = h
                         )
                     )
-                )
-                .glassHighlight(CircleShape, isDark)
-                .glassBorder(CircleShape, isDark, 1.dp)
+                    // 顶部窄高光：镜面反射
+                    drawRect(
+                        Brush.verticalGradient(
+                            colors = listOf(thumbSpecular, Color.Transparent),
+                            startY = 0f,
+                            endY = h * 0.42f
+                        )
+                    )
+                    // 底部柔阴影：体积感
+                    drawRect(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, thumbShade),
+                            startY = h * 0.55f,
+                            endY = h
+                        )
+                    )
+                }
+                .border(width = 1.dp, color = thumbEdge, shape = CircleShape)
         )
 
         // 左右文字：选中态加粗高亮

@@ -3,6 +3,8 @@ package com.example.notesapp.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.Circle
@@ -28,7 +31,9 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import com.example.notesapp.data.Note
+import com.example.notesapp.data.NoteType
 import com.example.notesapp.ui.theme.MarkdownBlock
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.parseMarkdown
@@ -63,7 +69,8 @@ fun NoteCard(
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     isSelected: Boolean = false,
-    transparency: Float = 0f
+    transparency: Float = 0f,
+    onComplete: () -> Unit = {}
 ) {
     val baseColor = note.color.toNoteColor(isDark)
     // 透明度开关：transparency=0 完全不透明；>0 时降低 alpha，让背景图透过来
@@ -156,31 +163,43 @@ fun NoteCard(
             else if (!shadowEnabled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
         ) {
         Box {
-            Column(modifier = Modifier.padding(16.dp)) {
-                if (note.title.isNotBlank()) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f).padding(16.dp)) {
+                    if (note.title.isNotBlank()) {
+                        Text(
+                            text = note.title,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = contentColor,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (note.content.isNotBlank()) {
+                        val markdownBlocks = parseMarkdown(note.content)
+                        MarkdownRenderer(
+                            blocks = markdownBlocks,
+                            textColor = contentColor.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(top = if (note.title.isNotBlank()) 6.dp else 0.dp),
+                            maxLines = 6
+                        )
+                    }
                     Text(
-                        text = note.title,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = contentColor,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        text = formatDate(note.updatedAt),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = contentColor.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
-                if (note.content.isNotBlank()) {
-                    val markdownBlocks = parseMarkdown(note.content)
-                    MarkdownRenderer(
-                        blocks = markdownBlocks,
-                        textColor = contentColor.copy(alpha = 0.85f),
-                        modifier = Modifier.padding(top = if (note.title.isNotBlank()) 6.dp else 0.dp),
-                        maxLines = 6
+                // 代办类型：右侧完成圆圈（非选择模式下显示），点击即完成并移入回收站
+                if (note.type == NoteType.TODO && !selectionMode) {
+                    TodoCompleteButton(
+                        onComplete = onComplete,
+                        tint = contentColor,
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .padding(end = 14.dp)
                     )
                 }
-                Text(
-                    text = formatDate(note.updatedAt),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = contentColor.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 8.dp)
-                )
             }
 
             // 选择模式下右上角显示勾选圈
@@ -282,6 +301,52 @@ fun MarkdownRenderer(
 private fun Color.isDark(): Boolean {
     val luminance = 0.299 * red + 0.587 * green + 0.114 * blue
     return luminance < 0.5
+}
+
+/**
+ * 代办完成按钮：右侧空心圆圈，点击后填充勾选并触发完成。
+ * 用于代办类型笔记，与备忘录区分交互逻辑。
+ */
+@Composable
+private fun TodoCompleteButton(
+    onComplete: () -> Unit,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    var checked by remember { mutableStateOf(false) }
+    Box(
+        modifier = modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .border(
+                width = 1.6.dp,
+                color = tint.copy(alpha = if (checked) 0f else 0.55f),
+                shape = CircleShape
+            )
+            .background(
+                if (checked) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                else Color.Transparent
+            )
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null
+            ) {
+                if (!checked) {
+                    checked = true
+                    onComplete()
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
 }
 
 private fun formatDate(timestamp: Long): String {
