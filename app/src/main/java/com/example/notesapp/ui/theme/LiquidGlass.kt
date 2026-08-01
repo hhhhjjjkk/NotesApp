@@ -40,7 +40,7 @@ fun glassOverlayColor(isDark: Boolean): Color =
     if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.35f)
 
 // 玻璃边缘高光色
-private fun glassEdgeColor(isDark: Boolean): Color =
+fun glassEdgeColor(isDark: Boolean): Color =
     if (isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.7f)
 
 /**

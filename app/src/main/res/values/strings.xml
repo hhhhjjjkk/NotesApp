@@ -36,4 +36,18 @@
     <string name="note_deleted">笔记已删除</string>
     <string name="notes_deleted">已删除 %1$d 条笔记</string>
     <string name="save_error">保存失败</string>
+    <string name="cancel">取消</string>
+    <!-- 回收站 -->
+    <string name="trash">回收站</string>
+    <string name="trash_empty">回收站为空</string>
+    <string name="trash_clear_all">清空</string>
+    <string name="trash_clear_title">清空回收站</string>
+    <string name="trash_clear_message">将永久删除回收站中的所有笔记，此操作不可撤销。</string>
+    <string name="trash_restore">恢复</string>
+    <string name="trash_delete">删除</string>
+    <string name="trash_delete_title">永久删除</string>
+    <string name="trash_delete_message">将永久删除该笔记，此操作不可撤销。</string>
+    <!-- 首页底部滑块 -->
+    <string name="tab_note">备忘录</string>
+    <string name="tab_todo">代办</string>
 </resources>

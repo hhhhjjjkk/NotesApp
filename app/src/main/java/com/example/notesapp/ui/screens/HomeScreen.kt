@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -73,6 +74,7 @@ import com.example.notesapp.R
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.ThemeMode
 import com.example.notesapp.ui.components.EmptyState
+import com.example.notesapp.ui.components.LiquidSegmentedSlider
 import com.example.notesapp.ui.components.NoteCard
 import com.example.notesapp.ui.components.SearchBar
 import com.example.notesapp.ui.theme.liquidGlassSurface
@@ -88,11 +90,13 @@ fun HomeScreen(
     settingsViewModel: SettingsViewModel,
     onNoteClick: (Long) -> Unit,
     onAddClick: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onTrashClick: () -> Unit
 ) {
     val context = LocalContext.current
     val notes by viewModel.notes.collectAsState()
     val searchQuery = viewModel.currentSearchQuery
+    val noteType by viewModel.noteType.collectAsState()
 
     val themeMode by settingsViewModel.themeMode.collectAsState()
     val cardRadius by settingsViewModel.cardRadius.collectAsState()
@@ -149,6 +153,14 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.Edit,
                                 contentDescription = "编辑",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                        // 回收站入口
+                        IconButton(onClick = onTrashClick) {
+                            Icon(
+                                imageVector = Icons.Outlined.DeleteSweep,
+                                contentDescription = stringResource(R.string.trash),
                                 tint = MaterialTheme.colorScheme.onBackground
                             )
                         }
@@ -278,7 +290,7 @@ fun HomeScreen(
                                         duration = SnackbarDuration.Short
                                     )
                                     if (result == SnackbarResult.ActionPerformed) {
-                                        viewModel.saveNote(deletedNote)
+                                        viewModel.undoDelete(deletedNote)
                                     }
                                 }
                             },
@@ -378,7 +390,7 @@ fun HomeScreen(
                                     duration = SnackbarDuration.Short
                                 )
                                 if (result == SnackbarResult.ActionPerformed) {
-                                    toDelete.forEach { viewModel.saveNote(it) }
+                                    toDelete.forEach { viewModel.undoDelete(it) }
                                 }
                             }
                         },
@@ -392,6 +404,27 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    // 底部液态玻璃分段滑块：左备忘录 / 右代办，实时跟手渲染。
+    // 选择模式下隐藏，避免与底部悬浮删除栏重叠。
+    AnimatedVisibility(
+        visible = !selectionMode,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter)
+    ) {
+        LiquidSegmentedSlider(
+            selected = noteType,
+            onSelected = { viewModel.setNoteType(it) },
+            leftLabel = stringResource(R.string.tab_note),
+            rightLabel = stringResource(R.string.tab_todo),
+            isDark = isDark,
+            modifier = Modifier
+                .fillMaxWidth(0.62f)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
+        )
     }
     } // 关闭外层 Box
 
@@ -489,7 +522,7 @@ fun HomeScreen(
                                 duration = SnackbarDuration.Short
                             )
                             if (result == SnackbarResult.ActionPerformed) {
-                                viewModel.saveNote(deletedNote)
+                                viewModel.undoDelete(deletedNote)
                             }
                         }
                     }

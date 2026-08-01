@@ -6,4 +6,5 @@ sealed class Screen(val route: String) {
         fun createRoute(noteId: Long = 0L) = "editor/$noteId"
     }
     data object Settings : Screen("settings")
+    data object Trash : Screen("trash")
 }

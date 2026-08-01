@@ -69,7 +69,8 @@ fun EditorScreen(
     noteId: Long,
     onBack: () -> Unit
 ) {
-    val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val notes by viewModel.allActiveNotes.collectAsStateWithLifecycle()
+    val currentType by viewModel.noteType.collectAsStateWithLifecycle()
     val existingNote = remember(noteId, notes) {
         notes.find { it.id == noteId }
     }
@@ -101,12 +102,14 @@ fun EditorScreen(
     }
 
     fun buildNote(): Note {
-        val base = existingNote ?: Note()
+        // 新建笔记时按首页当前选中的类型（备忘录/代办）创建
+        val base = existingNote ?: Note(type = currentType)
         return base.copy(
             title = title.trim(),
             content = content,
             color = selectedColor,
             isPinned = isPinned,
+            type = base.type,
             updatedAt = System.currentTimeMillis()
         )
     }

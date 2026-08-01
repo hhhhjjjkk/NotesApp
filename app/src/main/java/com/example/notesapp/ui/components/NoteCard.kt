@@ -104,29 +104,34 @@ fun NoteCard(
             // 直接读取 dismissState 的像素偏移自己计算进度，确保静止时 progress=0、
             // 背景完全透明，从而透过卡片显示自定义壁纸；滑动时红色渐进显现。
             val density = LocalDensity.current
-            val progress by remember {
+            val progress by remember(dismissState) {
                 derivedStateOf {
                     // requireOffset 在未 layout 时可能抛异常，安全降级为 0
                     val off = runCatching { dismissState.requireOffset() }.getOrDefault(0f)
                     val maxPx = with(density) { 160.dp.toPx() }
-                    (abs(off) / maxPx).coerceIn(0f, 1f)
+                    val raw = (abs(off) / maxPx).coerceIn(0f, 1f)
+                    // 低于阈值视为静止，强制全透明，杜绝任何残留透出
+                    if (raw < 0.05f) 0f else raw
                 }
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(shape)
-                    .background(
-                        MaterialTheme.colorScheme.errorContainer.copy(alpha = progress)
+            // 静止时不渲染任何背景层，确保完全透出壁纸
+            if (progress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                        .background(
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = progress)
+                        )
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = progress)
                     )
-                    .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = progress)
-                )
+                }
             }
         }
     ) {

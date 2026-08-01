@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.NoteRepository
+import com.example.notesapp.data.NoteType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,19 +24,34 @@ class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
 
     private val searchQuery = MutableStateFlow("")
 
+    // 当前主视图类型：备忘录 / 代办，由首页滑块切换
+    private val currentType = MutableStateFlow(NoteType.NOTE)
+    val noteType: StateFlow<Int> = currentType
+
+    // 首页列表：按当前 type 过滤，叠加搜索
     val notes: StateFlow<List<Note>> = combine(
         searchQuery,
+        currentType,
         repository.getAllNotes()
-    ) { query, allNotes ->
+    ) { query, type, allNotes ->
+        val filtered = allNotes.filter { it.type == type }
         if (query.isBlank()) {
-            allNotes
+            filtered
         } else {
-            allNotes.filter {
+            filtered.filter {
                 it.title.contains(query, ignoreCase = true) ||
                         it.content.contains(query, ignoreCase = true)
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // 全部未回收笔记（不按 type 过滤），供编辑页跨类型查找使用
+    val allActiveNotes: StateFlow<List<Note>> = repository.getAllNotes()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // 回收站列表
+    val trashedNotes: StateFlow<List<Note>> = repository.getTrashedNotes()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     var currentSearchQuery by mutableStateOf("")
         private set
@@ -45,6 +61,10 @@ class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
         searchQuery.value = query
     }
 
+    fun setNoteType(type: Int) {
+        currentType.value = type
+    }
+
     fun saveNote(note: Note, onSaved: (Long) -> Unit = {}) {
         viewModelScope.launch {
             val id = repository.saveNote(note)
@@ -52,16 +72,43 @@ class NotesViewModel(private val repository: NoteRepository) : ViewModel() {
         }
     }
 
+    // 软删除：移入回收站，可通过 undo 立即恢复
     fun deleteNote(note: Note, onDeleted: () -> Unit = {}) {
         viewModelScope.launch {
-            repository.deleteNote(note)
+            repository.moveToTrash(note)
             onDeleted()
+        }
+    }
+
+    // 撤销删除：把笔记恢复回主列表
+    fun undoDelete(note: Note) {
+        viewModelScope.launch {
+            repository.restoreFromTrash(note)
         }
     }
 
     fun togglePin(note: Note) {
         viewModelScope.launch {
             repository.saveNote(note.copy(isPinned = !note.isPinned))
+        }
+    }
+
+    // ===== 回收站操作 =====
+    fun restoreFromTrash(note: Note) {
+        viewModelScope.launch {
+            repository.restoreFromTrash(note)
+        }
+    }
+
+    fun permanentlyDelete(note: Note) {
+        viewModelScope.launch {
+            repository.deleteNote(note)
+        }
+    }
+
+    fun clearTrashed() {
+        viewModelScope.launch {
+            repository.clearTrashed()
         }
     }
 

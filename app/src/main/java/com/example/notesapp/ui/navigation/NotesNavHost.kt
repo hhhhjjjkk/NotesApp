@@ -23,6 +23,7 @@ import androidx.navigation.navArgument
 import com.example.notesapp.ui.screens.EditorScreen
 import com.example.notesapp.ui.screens.HomeScreen
 import com.example.notesapp.ui.screens.SettingsScreen
+import com.example.notesapp.ui.screens.TrashScreen
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
@@ -110,6 +111,9 @@ fun NotesNavHost(
                 },
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onTrashClick = {
+                    navController.navigate(Screen.Trash.route)
                 }
             )
         }
@@ -139,6 +143,20 @@ fun NotesNavHost(
         ) {
             SettingsScreen(
                 viewModel = settingsViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.Trash.route,
+            enterTransition = secondaryEnter,
+            exitTransition = secondaryExit,
+            popEnterTransition = secondaryPopEnter,
+            popExitTransition = secondaryPopExit
+        ) {
+            TrashScreen(
+                viewModel = notesViewModel,
+                settingsViewModel = settingsViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
