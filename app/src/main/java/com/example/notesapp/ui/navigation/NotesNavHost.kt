@@ -9,8 +9,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -24,40 +26,8 @@ import com.example.notesapp.ui.screens.TrashScreen
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
-private const val DURATION = 500
-
-private val slideSpec = { tween<IntOffset>(DURATION, easing = FastOutSlowInEasing) }
-private val fadeSpec = { tween<Float>(DURATION, easing = FastOutSlowInEasing) }
-
-// ===== 首页：不移动，被覆盖 / 被揭开 =====
-private val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    fadeIn(fadeSpec())
-}
-// 首页被二级页面覆盖时：原地不动，不做任何动画
-private val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    ExitTransition.None
-}
-// 二级页面滑走后首页被揭开：原地不动
-private val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    EnterTransition.None
-}
-private val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    ExitTransition.None
-}
-
-// ===== 二级页面：从右侧滑入覆盖首页，返回时向右滑出 =====
-private val secondaryEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    slideInHorizontally(slideSpec()) { fullWidth -> fullWidth }
-}
-private val secondaryExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    slideOutHorizontally(slideSpec()) { fullWidth -> -fullWidth }
-}
-private val secondaryPopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    slideInHorizontally(slideSpec()) { fullWidth -> -fullWidth }
-}
-private val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    slideOutHorizontally(slideSpec()) { fullWidth -> fullWidth }
-}
+// animSpeed 0f~1f → duration 800ms~200ms
+private fun animDuration(animSpeed: Float): Int = (800 - (animSpeed * 600).toInt()).coerceIn(200, 800)
 
 @Composable
 fun NotesNavHost(
@@ -66,6 +36,40 @@ fun NotesNavHost(
     settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier
 ) {
+    val animSpeed by settingsViewModel.animSpeed.collectAsStateWithLifecycle()
+    val duration = animDuration(animSpeed)
+
+    val slideSpec = { tween<IntOffset>(duration, easing = FastOutSlowInEasing) }
+    val fadeSpec = { tween<Float>(duration, easing = FastOutSlowInEasing) }
+
+    // 首页：不移动，被覆盖 / 被揭开
+    val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        fadeIn(fadeSpec())
+    }
+    val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        ExitTransition.None
+    }
+    val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        EnterTransition.None
+    }
+    val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        ExitTransition.None
+    }
+
+    // 二级页面：从右侧滑入覆盖首页，返回时向右滑出
+    val secondaryEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        slideInHorizontally(slideSpec()) { fullWidth -> fullWidth }
+    }
+    val secondaryExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        slideOutHorizontally(slideSpec()) { fullWidth -> -fullWidth }
+    }
+    val secondaryPopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        slideInHorizontally(slideSpec()) { fullWidth -> -fullWidth }
+    }
+    val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        slideOutHorizontally(slideSpec()) { fullWidth -> fullWidth }
+    }
+
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,

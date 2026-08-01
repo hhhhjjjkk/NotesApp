@@ -66,6 +66,7 @@ fun SettingsScreen(
     val cardTransparency by viewModel.cardTransparency.collectAsState()
     val backgroundUri by viewModel.backgroundUri.collectAsState()
     val backgroundDim by viewModel.backgroundDim.collectAsState()
+    val animSpeed by viewModel.animSpeed.collectAsState()
     val context = LocalContext.current
     val isSystemDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
@@ -270,6 +271,46 @@ fun SettingsScreen(
             )
             Text(
                 text = stringResource(R.string.card_transparency_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 动画速度：调节页面过渡和滑块动画的快慢
+            SettingsSectionTitle(stringResource(R.string.anim_speed))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.anim_speed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "${(animSpeed * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Slider(
+                value = animSpeed,
+                onValueChange = { viewModel.setAnimSpeed(it) },
+                valueRange = 0f..1f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, top = 4.dp)
+            )
+            Text(
+                text = stringResource(R.string.anim_speed_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp)

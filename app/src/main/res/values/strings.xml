@@ -58,4 +58,7 @@
     <string name="reminder_set_at">提醒已设至 %1$s</string>
     <string name="reminder_canceled">提醒已取消</string>
     <string name="notification_permission_denied">未授予通知权限，提醒可能无法显示</string>
+    <!-- 动画速度 -->
+    <string name="anim_speed">动画速度</string>
+    <string name="anim_speed_hint">数值越大动画越快，越小越慢</string>
 </resources>

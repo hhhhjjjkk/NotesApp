@@ -24,6 +24,7 @@ class DataStoreManager(private val context: Context) {
         val BACKGROUND_URI = stringPreferencesKey("background_uri")
         val BACKGROUND_DIM = floatPreferencesKey("background_dim")
         val CARD_TRANSPARENCY = floatPreferencesKey("card_transparency")
+        val ANIM_SPEED = floatPreferencesKey("anim_speed")
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
@@ -57,6 +58,11 @@ class DataStoreManager(private val context: Context) {
         (prefs[CARD_TRANSPARENCY] ?: 0f).coerceIn(0f, 1f)
     }
 
+    // 动画速度 0f~1f（0=最慢800ms；1=最快200ms；默认0.5=500ms）
+    val animSpeed: Flow<Float> = context.dataStore.data.map { prefs ->
+        (prefs[ANIM_SPEED] ?: 0.5f).coerceIn(0f, 1f)
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { it[THEME_MODE] = mode.name }
     }
@@ -88,6 +94,12 @@ class DataStoreManager(private val context: Context) {
     suspend fun setCardTransparency(transparency: Float) {
         context.dataStore.edit {
             it[CARD_TRANSPARENCY] = transparency.coerceIn(0f, 1f)
+        }
+    }
+
+    suspend fun setAnimSpeed(speed: Float) {
+        context.dataStore.edit {
+            it[ANIM_SPEED] = speed.coerceIn(0f, 1f)
         }
     }
 }

@@ -35,6 +35,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
     val cardTransparency: StateFlow<Float> = dataStoreManager.cardTransparency
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0f)
 
+    val animSpeed: StateFlow<Float> = dataStoreManager.animSpeed
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0.5f)
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { dataStoreManager.setThemeMode(mode) }
     }
@@ -61,5 +64,9 @@ class SettingsViewModel(private val dataStoreManager: DataStoreManager) : ViewMo
 
     fun setCardTransparency(transparency: Float) {
         viewModelScope.launch { dataStoreManager.setCardTransparency(transparency) }
+    }
+
+    fun setAnimSpeed(speed: Float) {
+        viewModelScope.launch { dataStoreManager.setAnimSpeed(speed) }
     }
 }
