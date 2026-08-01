@@ -120,7 +120,6 @@ fun HomeScreen(
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -184,6 +183,66 @@ fun HomeScreen(
         },
         floatingActionButton = {
             // FAB 已移到底部滑块同一 Row，避免与滑块重叠
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            AnimatedVisibility(
+                visible = !selectionMode,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    LiquidSegmentedSlider(
+                        selected = noteType,
+                        onSelected = { viewModel.setNoteType(it) },
+                        leftLabel = stringResource(R.string.tab_note),
+                        rightLabel = stringResource(R.string.tab_todo),
+                        isDark = isDark,
+                        modifier = Modifier.weight(1f)
+                    )
+                    val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)
+                    val primary = MaterialTheme.colorScheme.primary
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .then(scaleMod)
+                            .shadow(8.dp, CircleShape)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        primary.copy(alpha = 0.92f),
+                                        primary.copy(alpha = 0.62f)
+                                    )
+                                ),
+                                shape = CircleShape
+                            )
+                            .liquidGlassSurface(
+                                shape = CircleShape,
+                                isDark = isDark,
+                                borderWidth = 1.5.dp
+                            )
+                            .clickable(
+                                interactionSource = fabSrc,
+                                indication = null,
+                                onClick = onAddClick
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.new_note),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
@@ -272,185 +331,112 @@ fun HomeScreen(
                     }
                 }
             }
-        }
-    }
 
-    // 多选模式下的底部悬浮删除栏：锚定到屏幕底部，圆角玻璃卡片
-    AnimatedVisibility(
-        visible = selectionMode && selectedIds.isNotEmpty(),
-        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 16.dp)
-                .shadow(
-                    elevation = 12.dp,
-                    shape = RoundedCornerShape(28.dp),
-                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
-                )
-                .background(
-                    MaterialTheme.colorScheme.surface,
-                    RoundedCornerShape(28.dp)
-                )
-                .liquidGlassSurface(
-                    shape = RoundedCornerShape(28.dp),
-                    isDark = isDark,
-                    borderWidth = 1.dp
-                )
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .animateContentSize(animationSpec = tween(250)),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // 左侧：选中数量
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 8.dp)
+            // 多选模式下的底部悬浮删除栏：锚定到 Box 底部，圆角玻璃卡片
+            AnimatedVisibility(
+                visible = selectionMode && selectedIds.isNotEmpty(),
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                Box(
+                Row(
                     modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(28.dp),
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+                        )
+                        .background(
+                            MaterialTheme.colorScheme.surface,
+                            RoundedCornerShape(28.dp)
+                        )
+                        .liquidGlassSurface(
+                            shape = RoundedCornerShape(28.dp),
+                            isDark = isDark,
+                            borderWidth = 1.dp
+                        )
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .animateContentSize(animationSpec = tween(250)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "${selectedIds.size}",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-                Text(
-                    text = "已选 ${selectedIds.size} 项",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = 10.dp)
-                )
-            }
-            // 右侧：清空 + 删除
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { selectedIds = emptySet() }) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "清空选择",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                // 删除按钮：强调色圆形背景
-                Box(
-                    modifier = Modifier
-                        .padding(start = 4.dp)
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.error)
-                        .clickable {
-                            val toDelete = notes.filter { it.id in selectedIds }
-                            toDelete.forEach { viewModel.deleteNote(it) }
-                            val count = toDelete.size
-                            selectedIds = emptySet()
-                            selectionMode = false
-                            scope.launch {
-                                val result = snackbarHostState.showSnackbar(
-                                    message = context.getString(R.string.notes_deleted, count),
-                                    actionLabel = context.getString(R.string.undo),
-                                    duration = SnackbarDuration.Short
-                                )
-                                if (result == SnackbarResult.ActionPerformed) {
-                                    toDelete.forEach { viewModel.undoDelete(it) }
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.onError
-                    )
-                }
-            }
-        }
-    }
-
-    // 底部液态玻璃分段滑块 + 添加按钮：放在同一 Row，避免重叠。
-    // 选择模式下隐藏，避免与底部悬浮删除栏重叠。
-    AnimatedVisibility(
-        visible = !selectionMode,
-        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            LiquidSegmentedSlider(
-                selected = noteType,
-                onSelected = { viewModel.setNoteType(it) },
-                leftLabel = stringResource(R.string.tab_note),
-                rightLabel = stringResource(R.string.tab_todo),
-                isDark = isDark,
-                modifier = Modifier.weight(1f)
-            )
-            // 添加按钮：液态玻璃球，与滑块并排
-            val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)
-            val primary = MaterialTheme.colorScheme.primary
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .then(scaleMod)
-                    .shadow(8.dp, CircleShape)
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                primary.copy(alpha = 0.92f),
-                                primary.copy(alpha = 0.62f)
+                    // 左侧：选中数量
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${selectedIds.size}",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
-                        ),
-                        shape = CircleShape
-                    )
-                    .liquidGlassSurface(
-                        shape = CircleShape,
-                        isDark = isDark,
-                        borderWidth = 1.5.dp
-                    )
-                    .clickable(
-                        interactionSource = fabSrc,
-                        indication = null,
-                        onClick = onAddClick
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = stringResource(R.string.new_note),
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
+                        }
+                        Text(
+                            text = "已选 ${selectedIds.size} 项",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(start = 10.dp)
+                        )
+                    }
+                    // 右侧：清空 + 删除
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { selectedIds = emptySet() }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "清空选择",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // 删除按钮：强调色圆形背景
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error)
+                                .clickable {
+                                    val toDelete = notes.filter { it.id in selectedIds }
+                                    toDelete.forEach { viewModel.deleteNote(it) }
+                                    val count = toDelete.size
+                                    selectedIds = emptySet()
+                                    selectionMode = false
+                                    scope.launch {
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = context.getString(R.string.notes_deleted, count),
+                                            actionLabel = context.getString(R.string.undo),
+                                            duration = SnackbarDuration.Short
+                                        )
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            toDelete.forEach { viewModel.undoDelete(it) }
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "删除",
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    }
+                }
             }
         }
     }
-
-    // Snackbar：放在外层 Box 底部，预留底部液态玻璃滑块的高度，
-    // 避免提示框被滑块遮挡或与滑块位置错乱（已完成/删除备忘录的提示不再错位）
-    SnackbarHost(
-        hostState = snackbarHostState,
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .navigationBarsPadding()
-            .padding(bottom = 84.dp)
-    )
-    } // 关闭外层 Box
 
     // 长按弹出的底部操作菜单
     if (sheetNote != null) {
