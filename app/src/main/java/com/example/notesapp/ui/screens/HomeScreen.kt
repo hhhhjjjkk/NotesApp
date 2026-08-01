@@ -243,6 +243,20 @@ fun HomeScreen(
                                 sheetNote = note
                                 scope.launch { sheetState.show() }
                             },
+                            onSwipeDelete = {
+                                val deletedNote = note
+                                viewModel.deleteNote(deletedNote)
+                                scope.launch {
+                                    val result = snackbarHostState.showSnackbar(
+                                        message = context.getString(R.string.note_deleted),
+                                        actionLabel = context.getString(R.string.undo),
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        viewModel.saveNote(deletedNote)
+                                    }
+                                }
+                            },
                             modifier = Modifier.animateItemPlacement()
                         )
                     }

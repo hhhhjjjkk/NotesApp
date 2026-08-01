@@ -2,24 +2,33 @@ package com.example.notesapp.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -36,7 +45,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NoteCard(
     note: Note,
@@ -45,6 +54,7 @@ fun NoteCard(
     shadowEnabled: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onSwipeDelete: () -> Unit = {},
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     isSelected: Boolean = false
@@ -59,26 +69,60 @@ fun NoteCard(
     val shape = RoundedCornerShape(radiusDp.dp)
     val (scaleModifier, interactionSource) = rememberPressableGlassScale(pressedScale = 0.97f)
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(scaleModifier)
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-            .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 1.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        shape = shape,
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (shadowEnabled) 2.dp else 0.dp
-        ),
-        // 选中态用强调色描边，否则按原逻辑
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        else if (!shadowEnabled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
+    // 左滑删除：选择模式下禁用，避免误删
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onSwipeDelete()
+                true
+            } else {
+                false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = !selectionMode,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(shape)
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
     ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(scaleModifier)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                )
+                .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 1.dp),
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = shape,
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (shadowEnabled) 2.dp else 0.dp
+            ),
+            // 选中态用强调色描边，否则按原逻辑
+            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            else if (!shadowEnabled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
+        ) {
         Box {
             Column(modifier = Modifier.padding(16.dp)) {
                 if (note.title.isNotBlank()) {
@@ -120,6 +164,7 @@ fun NoteCard(
                         .size(24.dp)
                 )
             }
+        }
         }
     }
 }
