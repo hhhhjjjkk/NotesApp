@@ -152,8 +152,10 @@ fun EditorScreen(
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        delay(80)
-        focusRequester.requestFocus()
+        if (noteId == 0L) {
+            delay(80)
+            focusRequester.requestFocus()
+        }
     }
 
     fun buildNote(): Note {
@@ -264,8 +266,7 @@ fun EditorScreen(
                     onValueChange = { title = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp)
-                        .focusRequester(focusRequester),
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
                     textStyle = TextStyle(
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
@@ -290,7 +291,8 @@ fun EditorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
+                        .focusRequester(focusRequester),
                     textStyle = TextStyle(
                         fontSize = 16.sp,
                         lineHeight = 24.sp,
