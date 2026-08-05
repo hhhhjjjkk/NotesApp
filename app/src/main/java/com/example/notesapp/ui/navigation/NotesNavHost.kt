@@ -3,9 +3,10 @@ package com.example.notesapp.ui.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -26,8 +27,14 @@ import com.example.notesapp.ui.screens.TrashScreen
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
-// animSpeed 0f~1f → duration 800ms~200ms
-private fun animDuration(animSpeed: Float): Int = (800 - (animSpeed * 600).toInt()).coerceIn(200, 800)
+// animSpeed 0f~1f → duration 900ms~300ms（默认更舒缓，仍可通过滑块调节）
+private fun animDuration(animSpeed: Float): Int =
+    (900 - (animSpeed * 600).toInt()).coerceIn(300, 900)
+
+// Material 3 Emphasized 缓动：进入用减速曲线（起步利落、收尾轻柔，自然停住）
+private val emphasizedDecel = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
+// 退出用加速曲线（起步平稳、收尾利落，自然离开）
+private val emphasizedAccel = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
 
 @Composable
 fun NotesNavHost(
@@ -39,12 +46,16 @@ fun NotesNavHost(
     val animSpeed by settingsViewModel.animSpeed.collectAsStateWithLifecycle()
     val duration = animDuration(animSpeed)
 
-    val slideSpec = { tween<IntOffset>(duration, easing = FastOutSlowInEasing) }
-    val fadeSpec = { tween<Float>(duration, easing = FastOutSlowInEasing) }
+    // 进入：减速曲线，页面“稳稳停住”
+    val enterSlideSpec = { tween<IntOffset>(duration, easing = emphasizedDecel) }
+    val enterFadeSpec = { tween<Float>(duration, easing = emphasizedDecel) }
+    // 退出：加速曲线，页面“自然离开”
+    val exitSlideSpec = { tween<IntOffset>(duration, easing = emphasizedAccel) }
+    val exitFadeSpec = { tween<Float>(duration, easing = emphasizedAccel) }
 
-    // 首页：不移动，被覆盖 / 被揭开
+    // 首页：不移动，被覆盖 / 被揭开，避免割裂感
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(fadeSpec())
+        fadeIn(tween(duration, easing = emphasizedDecel))
     }
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         ExitTransition.None
@@ -56,18 +67,22 @@ fun NotesNavHost(
         ExitTransition.None
     }
 
-    // 二级页面：从右侧滑入覆盖首页，返回时向右滑出
+    // 二级页面：滑入/滑出叠加淡入/淡出，让边缘过渡更柔和，避免硬切
     val secondaryEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(slideSpec()) { fullWidth -> fullWidth }
+        slideInHorizontally(enterSlideSpec()) { fullWidth -> fullWidth } +
+            fadeIn(enterFadeSpec())
     }
     val secondaryExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(slideSpec()) { fullWidth -> -fullWidth }
+        slideOutHorizontally(exitSlideSpec()) { fullWidth -> -fullWidth } +
+            fadeOut(exitFadeSpec())
     }
     val secondaryPopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(slideSpec()) { fullWidth -> -fullWidth }
+        slideInHorizontally(enterSlideSpec()) { fullWidth -> -fullWidth } +
+            fadeIn(enterFadeSpec())
     }
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(slideSpec()) { fullWidth -> fullWidth }
+        slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth } +
+            fadeOut(exitFadeSpec())
     }
 
     NavHost(
