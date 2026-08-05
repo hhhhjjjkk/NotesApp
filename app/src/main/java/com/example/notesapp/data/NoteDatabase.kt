@@ -41,7 +41,8 @@ abstract class NoteDatabase : RoomDatabase() {
                     "notes_database.db"
                 )
                     .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
-                    .fallbackToDestructiveMigration()
+                    // 仅在降级时销毁数据；升级路径必须由 Migration 覆盖，避免用户笔记丢失
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also {
                         INSTANCE = it
                     }

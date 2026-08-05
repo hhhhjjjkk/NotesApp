@@ -452,13 +452,13 @@ fun HomeScreen(
     }
 
     // 长按弹出的底部操作菜单
-    if (sheetNote != null) {
+    // 用 let 安全捕获当前 note，避免 dismiss 过渡帧 sheetNote 已 null 时强解包 NPE
+    sheetNote?.let { note ->
         ModalBottomSheet(
             onDismissRequest = { sheetNote = null },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface
         ) {
-            val note = sheetNote!!
             Column {
                 // 标题预览
                 Text(

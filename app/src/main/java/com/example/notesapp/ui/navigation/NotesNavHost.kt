@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
@@ -41,10 +42,18 @@ fun NotesNavHost(
     navController: NavHostController,
     notesViewModel: NotesViewModel,
     settingsViewModel: SettingsViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialNoteId: Long = 0L
 ) {
     val animSpeed by settingsViewModel.animSpeed.collectAsStateWithLifecycle()
     val duration = animDuration(animSpeed)
+
+    // 通知点击进入时跳转到对应笔记编辑页
+    LaunchedEffect(initialNoteId) {
+        if (initialNoteId > 0L) {
+            navController.navigate(Screen.Editor.createRoute(initialNoteId))
+        }
+    }
 
     // 进入：减速曲线，页面“稳稳停住”
     val enterSlideSpec = { tween<IntOffset>(duration, easing = emphasizedDecel) }

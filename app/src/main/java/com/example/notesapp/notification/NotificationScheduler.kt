@@ -18,13 +18,17 @@ object NotificationScheduler {
 
     /**
      * 调度一条笔记的提醒闹钟。
-     * 若 reminderAt <= 0 或已过期则取消闹钟。
+     * - reminderAt <= 0：取消闹钟
+     * - reminderAt 已过期：取消闹钟（避免每次自动保存都立即触发通知）
+     * - 否则按精确闹钟调度
      */
     fun schedule(context: Context, note: Note) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pendingIntent = buildPendingIntent(context, note.id)
 
-        if (note.reminderAt <= 0L) {
+        // 过期或未设置：取消已存在的闹钟，避免 onReceive 之外的立即触发
+        val now = System.currentTimeMillis()
+        if (note.reminderAt <= now) {
             am.cancel(pendingIntent)
             return
         }
@@ -67,9 +71,14 @@ object NotificationScheduler {
         }
         return PendingIntent.getBroadcast(
             context,
-            noteId.toInt(),
+            noteId.requestCode(),  // Long 派生稳定 Int，避免 toInt() 截断碰撞
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
     }
+
+    /**
+     * 由 Long noteId 派生稳定的 Int 请求码，避免不同 noteId 落到同一 Int 导致 PendingIntent 串台。
+     */
+    private fun Long.requestCode(): Int = (this xor (this ushr 32)).toInt()
 }

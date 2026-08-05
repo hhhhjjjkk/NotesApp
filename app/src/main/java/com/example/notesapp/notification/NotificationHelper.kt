@@ -47,7 +47,7 @@ object NotificationHelper {
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
-            noteId.toInt(),
+            noteId.requestCode(),
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -62,6 +62,11 @@ object NotificationHelper {
             .setAutoCancel(true)
             .build()
 
-        manager.notify(noteId.toInt(), notification)
+        manager.notify(noteId.requestCode(), notification)
     }
+
+    /**
+     * 由 Long noteId 派生稳定的 Int 请求码/通知 ID，避免 toInt() 截断碰撞。
+     */
+    private fun Long.requestCode(): Int = (this xor (this ushr 32)).toInt()
 }

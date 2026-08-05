@@ -5,6 +5,7 @@ import android.app.AlarmManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -101,25 +102,36 @@ fun EditorScreen(
     var selectedColor by rememberSaveable { mutableStateOf(0) }
     var isPinned by rememberSaveable { mutableStateOf(false) }
     var noteLoaded by rememberSaveable { mutableStateOf(false) }
-    var showMarkdownHelp by remember { mutableStateOf(false) }
+    var showMarkdownHelp by rememberSaveable { mutableStateOf(false) }
     val markdownHelpSheetState = rememberModalBottomSheetState()
 
-    // 提醒相关状态
+    // 提醒相关状态（全部 rememberSaveable，旋转屏后保留）
     var reminderAt by rememberSaveable { mutableStateOf(0L) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var pickedYear by remember { mutableStateOf(0) }
-    var pickedMonth by remember { mutableStateOf(0) }
-    var pickedDay by remember { mutableStateOf(0) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
+    var pickedYear by rememberSaveable { mutableStateOf(0) }
+    var pickedMonth by rememberSaveable { mutableStateOf(0) }
+    var pickedDay by rememberSaveable { mutableStateOf(0) }
     val context = LocalContext.current
+
+    // 退出标志：返回触发后停止自动保存，避免与 saveAndExit 竞态导致重复保存
+    var isExiting by rememberSaveable { mutableStateOf(false) }
+
+    // 日期选择器触发计数器：每次需要打开日期选择器时自增，确保 LaunchedEffect 重新触发
+    var datePickerTrigger by rememberSaveable { mutableStateOf(0) }
 
     // 通知权限请求（Android 13+）
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            // 权限通过，继续弹出日期选择
-            showDatePicker = true
+            // 权限通过，触发日期选择器
+            datePickerTrigger++
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.notification_permission_denied),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -134,10 +146,30 @@ fun EditorScreen(
                 return
             }
         }
-        showDatePicker = true
+        datePickerTrigger++
     }
 
-    LaunchedEffect(existingNote) {
+    // 日期选择器（原生 DatePickerDialog），由 datePickerTrigger 计数器驱动，每次自增都重新弹出
+    LaunchedEffect(datePickerTrigger) {
+        if (datePickerTrigger == 0) return@LaunchedEffect
+        val cal = Calendar.getInstance()
+        android.app.DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                pickedYear = year
+                pickedMonth = month
+                pickedDay = day
+                showTimePicker = true
+            },
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH),
+            cal.get(Calendar.DAY_OF_MONTH)
+        ).apply {
+            datePicker.minDate = System.currentTimeMillis()
+        }.show()
+    }
+
+    LaunchedEffect(noteId) {
         if (!noteLoaded) {
             existingNote?.let {
                 title = it.title
@@ -151,16 +183,18 @@ fun EditorScreen(
     }
 
     val focusRequester = remember { FocusRequester() }
+    // 新建笔记时自动聚焦内容输入框；用 try-catch 兜住未布局完成的情况
     LaunchedEffect(Unit) {
         if (noteId == 0L) {
             delay(80)
-            focusRequester.requestFocus()
+            runCatching { focusRequester.requestFocus() }
         }
     }
 
     fun buildNote(): Note {
         // 新建笔记时按首页当前选中的类型（备忘录/代办）创建
-        val base = existingNote ?: Note(type = currentType)
+        // 即使 existingNote 在编辑期间被外部回收，也保留 noteId，避免退化为新建
+        val base = existingNote ?: Note(id = noteId, type = currentType)
         return base.copy(
             title = title.trim(),
             content = content,
@@ -173,6 +207,8 @@ fun EditorScreen(
     }
 
     fun saveAndExit() {
+        if (isExiting) return  // 防止重复触发
+        isExiting = true
         val note = buildNote()
         if (note.title.isNotBlank() || note.content.isNotBlank()) {
             viewModel.saveNote(note) { onBack() }
@@ -183,8 +219,9 @@ fun EditorScreen(
 
     BackHandler { saveAndExit() }
 
+    // 自动保存：仅在编辑现有笔记且未退出时触发，避免与返回保存重复
     LaunchedEffect(title, content, selectedColor, isPinned, reminderAt) {
-        if (noteId != 0L) {
+        if (noteId != 0L && !isExiting) {
             delay(1500)
             val note = buildNote()
             if (note.title.isNotBlank() || note.content.isNotBlank()) {
@@ -285,6 +322,41 @@ fun EditorScreen(
                         innerTextField()
                     }
                 )
+
+                // 提醒状态显示行（移到 Scaffold 内部，紧跟标题下方，避免重叠 TopAppBar）
+                if (reminderAt > 0L) {
+                    val reminderText = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
+                        .format(Date(reminderAt))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AlarmOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = "提醒：$reminderText",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            text = "取消",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.clickable { reminderAt = 0L }
+                        )
+                    }
+                }
+
                 BasicTextField(
                     value = content,
                     onValueChange = { content = it },
@@ -378,34 +450,6 @@ fun EditorScreen(
         }
     }
 
-    // 提醒时间显示文本
-    val reminderText = if (reminderAt > 0L) {
-        SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(Date(reminderAt))
-    } else null
-
-    // 日期选择器（使用原生 DatePickerDialog）
-    if (showDatePicker) {
-        LaunchedEffect(showDatePicker) {
-            val cal = Calendar.getInstance()
-            android.app.DatePickerDialog(
-                context,
-                { _, year, month, day ->
-                    pickedYear = year
-                    pickedMonth = month
-                    pickedDay = day
-                    showDatePicker = false
-                    showTimePicker = true
-                },
-                cal.get(Calendar.YEAR),
-                cal.get(Calendar.MONTH),
-                cal.get(Calendar.DAY_OF_MONTH)
-            ).apply {
-                datePicker.minDate = System.currentTimeMillis()
-                setOnCancelListener { showDatePicker = false }
-            }.show()
-        }
-    }
-
     // 时间选择器 Dialog（Compose Material3 TimePicker）
     if (showTimePicker) {
         val timeState = rememberTimePickerState(
@@ -429,9 +473,15 @@ fun EditorScreen(
                     val target = c.timeInMillis
                     if (target > System.currentTimeMillis()) {
                         reminderAt = target
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.reminder_in_past),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                     showTimePicker = false
-                }) { Text("确定") }
+                }) { Text(stringResource(R.string.confirm)) }
             },
             dismissButton = {
                 TextButton(onClick = { showTimePicker = false }) {
@@ -439,38 +489,6 @@ fun EditorScreen(
                 }
             }
         )
-    }
-
-    // 提醒状态显示行（当有提醒时在标题下方显示）
-    if (reminderAt > 0L) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.AlarmOn,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text(
-                text = "提醒：$reminderText",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "取消",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.clickable { reminderAt = 0L }
-            )
-        }
     }
 
     // Markdown 语法提示弹窗

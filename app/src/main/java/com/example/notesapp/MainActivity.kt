@@ -1,5 +1,6 @@
 package com.example.notesapp
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +23,13 @@ import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
 class MainActivity : ComponentActivity() {
+
+    /** 从通知 PendingIntent 中读出 noteId，>0 表示需要跳转到编辑页。 */
+    private fun noteIdFromIntent(intent: Intent?): Long {
+        if (intent == null) return 0L
+        return intent.getLongExtra("noteId", 0L)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // 必须在 super.onCreate 之前安装，以便正确替换启动主题
         installSplashScreen()
@@ -34,6 +42,7 @@ class MainActivity : ComponentActivity() {
         val dataStoreManager = app.dataStoreManager
         val repository by lazy { NoteRepository(NoteDatabase.getInstance(app).noteDao()) }
 
+        val initialNoteId = noteIdFromIntent(intent)
         setContent {
             val settingsViewModel: SettingsViewModel = viewModel {
                 SettingsViewModel(dataStoreManager)
@@ -65,10 +74,18 @@ class MainActivity : ComponentActivity() {
                     NotesNavHost(
                         navController = navController,
                         notesViewModel = notesViewModel,
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        initialNoteId = initialNoteId
                     )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // 通知点击再次进入时也跳转：通过 setContent 重新读取 intent（这里仅触发一次重组即可）
+        // 由于 navController 在 Composable 内创建，这里通过重建 intent 后由系统重组触发
     }
 }

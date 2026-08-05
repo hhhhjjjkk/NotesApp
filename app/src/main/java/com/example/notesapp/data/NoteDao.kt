@@ -46,4 +46,12 @@ interface NoteDao {
     // 查询所有未触发提醒的笔记（用于开机/启动后恢复闹钟调度）
     @Query("SELECT * FROM notes WHERE isTrashed = 0 AND reminderAt > :now")
     suspend fun getNotesWithPendingReminders(now: Long): List<Note>
+
+    // 查询所有过期但未触发提醒的笔记（用于开机后补发漏掉的提醒）
+    @Query("SELECT * FROM notes WHERE isTrashed = 0 AND reminderAt > 0 AND reminderAt <= :now")
+    suspend fun getNotesWithMissedReminders(now: Long): List<Note>
+
+    // 清零已触发的提醒，避免下次保存时又被重新调度
+    @Query("UPDATE notes SET reminderAt = 0 WHERE id = :id")
+    suspend fun clearReminder(id: Long)
 }
