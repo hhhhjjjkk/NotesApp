@@ -3,7 +3,6 @@ package com.example.notesapp.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -94,7 +93,6 @@ fun LiquidSegmentedSlider(
     val trackBase = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.16f)
     val trackTopShadow = if (isDark) Color.Black.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.07f)
     val trackBottomLight = if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.20f)
-    val trackEdge = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.22f)
 
     // 主题色：用于实时跟随滑块的染色高光带
     val primary = MaterialTheme.colorScheme.primary
@@ -136,7 +134,6 @@ fun LiquidSegmentedSlider(
                     )
                 }
             }
-            .border(width = 1.dp, color = trackEdge, shape = CircleShape)
             .onSizeChanged { widthPx = it.width.toFloat() }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
@@ -175,8 +172,7 @@ fun LiquidSegmentedSlider(
         val thumbBottom = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.26f)
         val thumbSpecular = if (isDark) Color.White.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.80f)
         val thumbShade = if (isDark) Color.Black.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.06f)
-        val thumbEdge = if (isDark) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.62f)
-        // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
+    // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
         val thumbTint = primary.copy(alpha = if (isDark) 0.10f else 0.08f)
 
         // 滑块：液态玻璃材质，随手指实时位移
@@ -224,7 +220,6 @@ fun LiquidSegmentedSlider(
                         )
                     )
                 }
-                .border(width = 1.dp, color = thumbEdge, shape = CircleShape)
         )
 
         // 左右文字：颜色随滑块实时插值（lerp），不再等 selected 切换后才变色——彻底消除"颜色延迟跟随"

@@ -152,7 +152,7 @@ fun NoteCard(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 1.dp),
+                .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 0.dp),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = shape,
             elevation = CardDefaults.cardElevation(
