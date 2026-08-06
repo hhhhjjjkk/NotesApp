@@ -43,7 +43,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.data.NoteType
-import com.example.notesapp.ui.theme.realGlassBlur
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -170,13 +169,11 @@ fun LiquidSegmentedSlider(
         // 滑块（凸起玻璃）配色：在原基础上叠加主题色，让"覆盖处"呈现明显变色
         val thumbTop = if (isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.55f)
         val thumbBottom = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.26f)
-        val thumbSpecular = if (isDark) Color.White.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.80f)
-        val thumbShade = if (isDark) Color.Black.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.06f)
     // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
         val thumbTint = primary.copy(alpha = if (isDark) 0.10f else 0.08f)
 
-        // 滑块：液态玻璃材质，随手指实时位移
-        // realGlassBlur 在 Android 12+ 对玻璃层做真实高斯模糊，告别"塑料感"
+        // 滑块：保留主题色染色随手指实时位移；移除 realGlassBlur 与多层玻璃高光，
+        // 仅保留轻投影与基础渐变，避免视觉上出现明显"框"
         Box(
             modifier = Modifier
                 .padding(vertical = padDp)
@@ -190,7 +187,6 @@ fun LiquidSegmentedSlider(
                     spotColor = Color.Black.copy(alpha = 0.18f)
                 )
                 .clip(CircleShape)
-                .realGlassBlur(8.dp)
                 .drawBehind {
                     val h = size.height
                     // 基础渐变：上亮下暗，模拟玻璃受光
@@ -203,22 +199,6 @@ fun LiquidSegmentedSlider(
                     )
                     // 主题色染色层：覆盖区域明显变色
                     drawRect(thumbTint)
-                    // 顶部窄高光：镜面反射
-                    drawRect(
-                        Brush.verticalGradient(
-                            colors = listOf(thumbSpecular, Color.Transparent),
-                            startY = 0f,
-                            endY = h * 0.42f
-                        )
-                    )
-                    // 底部柔阴影：体积感
-                    drawRect(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, thumbShade),
-                            startY = h * 0.55f,
-                            endY = h
-                        )
-                    )
                 }
         )
 

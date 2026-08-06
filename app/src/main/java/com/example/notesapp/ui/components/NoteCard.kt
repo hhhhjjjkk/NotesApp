@@ -47,7 +47,6 @@ import kotlin.math.abs
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.NoteType
 import com.example.notesapp.ui.theme.MarkdownBlock
-import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.parseMarkdown
 import com.example.notesapp.ui.theme.rememberPressableGlassScale
 import com.example.notesapp.ui.theme.toNoteColor
@@ -151,15 +150,14 @@ fun NoteCard(
                     indication = null,
                     onClick = onClick,
                     onLongClick = onLongClick
-                )
-                .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 0.dp),
+                ),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = shape,
             elevation = CardDefaults.cardElevation(
                 defaultElevation = if (shadowEnabled) 2.dp else 0.dp
             ),
-            // 仅选中态显示强调色描边；非选中态不画实色边框，
-            // 卡片边缘由 liquidGlassSurface 的玻璃高光负责，避免出现明显的长方形框
+            // 仅选中态显示强调色描边；非选中态不画任何边框，
+            // 彻底移除液态玻璃高光，避免出现明显的长方形框
             border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
         ) {
         Box {
