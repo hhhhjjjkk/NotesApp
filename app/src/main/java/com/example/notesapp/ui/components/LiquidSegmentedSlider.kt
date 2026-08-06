@@ -141,9 +141,11 @@ fun LiquidSegmentedSlider(
 
         // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
         val thumbTint = primary.copy(alpha = if (isDark) 0.10f else 0.08f)
+        // 滑块实体底色：surface 色让滑块可见，叠加主题色染色让覆盖处变色，无渐变无边框
+        val thumbBase = MaterialTheme.colorScheme.surface
 
-        // 滑块：保留主题色染色随手指实时位移；去掉所有玻璃渐变、投影、clip，
-        // 仅保留基础背景色与主题色染色，彻底消除视觉"框"
+        // 滑块：surface 实体底色 + 主题色染色，随手指实时位移；
+        // 圆角裁剪保留，无玻璃、无阴影、无渐变，彻底消除视觉"框"
         Box(
             modifier = Modifier
                 .padding(vertical = padDp)
@@ -152,6 +154,7 @@ fun LiquidSegmentedSlider(
                 .fillMaxHeight()
                 .clip(CircleShape)
                 .drawBehind {
+                    drawRect(thumbBase)
                     drawRect(thumbTint)
                 }
         )
