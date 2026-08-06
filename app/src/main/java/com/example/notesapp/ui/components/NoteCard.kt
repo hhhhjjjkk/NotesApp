@@ -170,7 +170,7 @@ fun NoteCard(
                         )
                     }
                     if (note.content.isNotBlank()) {
-                        val markdownBlocks = parseMarkdown(note.content)
+                        val markdownBlocks = remember(note.content) { parseMarkdown(note.content) }
                         MarkdownRenderer(
                             blocks = markdownBlocks,
                             textColor = contentColor.copy(alpha = 0.85f),
@@ -188,6 +188,7 @@ fun NoteCard(
                 // 代办类型：右侧完成圆圈（非选择模式下显示），点击即完成并移入回收站
                 if (note.type == NoteType.TODO && !selectionMode) {
                     TodoCompleteButton(
+                        noteId = note.id,
                         onComplete = onComplete,
                         tint = contentColor,
                         modifier = Modifier
@@ -304,11 +305,13 @@ private fun Color.isDark(): Boolean {
  */
 @Composable
 private fun TodoCompleteButton(
+    noteId: Long,
     onComplete: () -> Unit,
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    var checked by remember { mutableStateOf(false) }
+    // 绑定 noteId：undo 恢复后复用同一槽位时，checked 不会残留为 true
+    var checked by remember(noteId) { mutableStateOf(false) }
     Box(
         modifier = modifier
             .size(26.dp)

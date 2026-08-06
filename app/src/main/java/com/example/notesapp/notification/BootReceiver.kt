@@ -7,6 +7,7 @@ import com.example.notesapp.data.NoteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -48,8 +49,10 @@ class BootReceiver : BroadcastReceiver() {
                         }
                     } catch (e: Exception) {
                         if (e is kotlinx.coroutines.CancellationException) throw e
+                        android.util.Log.e("BootReceiver", "开机恢复提醒失败", e)
                     } finally {
                         pendingResult.finish()
+                        scope.cancel()
                     }
                 }
             }

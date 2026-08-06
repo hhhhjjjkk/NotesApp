@@ -118,13 +118,18 @@ fun LiquidSegmentedSlider(
     ) {
         val thumbWidthDp = (maxWidth - padDp * 2) / 2
         val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
-        val thumbOffsetPx = animOffset.value * thumbWidthPx
 
         // 滑块：完全透明，无任何底色/染色/渐变，仅靠文字颜色变化指示选中状态
+        // offset 用 lambda 延迟读取 animOffset.value，避免动画每帧触发组合阶段重组
         Box(
             modifier = Modifier
                 .padding(vertical = padDp)
-                .offset { IntOffset((padPx + thumbOffsetPx).roundToInt(), 0) }
+                .offset {
+                    IntOffset(
+                        (padPx + animOffset.value * thumbWidthPx).roundToInt(),
+                        0
+                    )
+                }
                 .width(thumbWidthDp)
                 .fillMaxHeight()
         )

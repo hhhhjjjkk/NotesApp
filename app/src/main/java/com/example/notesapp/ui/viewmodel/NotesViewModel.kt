@@ -103,7 +103,8 @@ class NotesViewModel(
 
     fun togglePin(note: Note) {
         viewModelScope.launch {
-            repository.saveNote(note.copy(isPinned = !note.isPinned))
+            // 原子翻转：避免基于陈旧 note 对象翻转导致快速双击结果错误
+            repository.togglePin(note.id)
         }
     }
 

@@ -20,16 +20,19 @@ sealed class MarkdownBlock {
     data object Blank : MarkdownBlock()
 }
 
+// 预编译正则，避免每次解析都重新编译（parseMarkdown 在 NoteCard 每次重组都会调用）
+private val BOLD_REGEX = Regex("""\*\*(.+?)\*\*""")
+private val ITALIC_REGEX = Regex("""\*(.+?)\*""")
+private val ORDERED_LIST_REGEX = Regex("""^\d+\. .*""")
+private val ORDERED_LIST_PARSE_REGEX = Regex("""^(\d+)\. (.*)""")
+
 /**
  * 将带有内联标记的字符串解析为 AnnotatedString，支持粗体和斜体。
  */
 fun parseInlineMarkdown(text: String): AnnotatedString {
     return buildAnnotatedString {
-        val boldRegex = Regex("""\*\*(.+?)\*\*""")
-        val italicRegex = Regex("""\*(.+?)\*""")
-
         // 先处理粗体
-        val boldParts = boldRegex.split(text)
+        val boldParts = BOLD_REGEX.split(text)
         for (i in boldParts.indices) {
             val part = boldParts[i]
             if (i % 2 == 1) {
@@ -39,7 +42,7 @@ fun parseInlineMarkdown(text: String): AnnotatedString {
                 pop()
             } else {
                 // 这部分可能包含斜体
-                val italicParts = italicRegex.split(part)
+                val italicParts = ITALIC_REGEX.split(part)
                 for (j in italicParts.indices) {
                     val italicPart = italicParts[j]
                     if (j % 2 == 1) {
@@ -98,8 +101,8 @@ private fun parseMarkdownInternal(text: String): List<MarkdownBlock> {
             }
 
             // 有序列表
-            trimmedLine.matches(Regex("""^\d+\. .*""")) -> {
-                val matchResult = Regex("""^(\d+)\. (.*)""").find(trimmedLine)
+            trimmedLine.matches(ORDERED_LIST_REGEX) -> {
+                val matchResult = ORDERED_LIST_PARSE_REGEX.find(trimmedLine)
                 if (matchResult != null) {
                     val index = matchResult.groupValues[1].toInt()
                     val content = matchResult.groupValues[2]
@@ -121,7 +124,7 @@ private fun parseMarkdownInternal(text: String): List<MarkdownBlock> {
                 while (i < lines.size && !lines[i].isBlank() && !lines[i].trimStart().startsWith("# ") &&
                     !lines[i].trimStart().startsWith("## ") &&
                     !lines[i].trimStart().startsWith("- ") && !lines[i].trimStart().startsWith("* ") &&
-                    !lines[i].trimStart().matches(Regex("""^\d+\. .*"""))) {
+                    !lines[i].trimStart().matches(ORDERED_LIST_REGEX)) {
                     paragraphLines.add(lines[i])
                     i++
                 }

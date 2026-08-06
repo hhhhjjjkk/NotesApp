@@ -43,6 +43,8 @@ class MainActivity : ComponentActivity() {
         val repository by lazy { NoteRepository(NoteDatabase.getInstance(app).noteDao()) }
 
         val initialNoteId = noteIdFromIntent(intent)
+        // 初始化成员字段：onNewIntent 时更新此 State 触发 Compose 重组
+        pendingNoteIdState = androidx.compose.runtime.mutableLongStateOf(initialNoteId)
         setContent {
             val settingsViewModel: SettingsViewModel = viewModel {
                 SettingsViewModel(dataStoreManager)
@@ -75,17 +77,24 @@ class MainActivity : ComponentActivity() {
                         navController = navController,
                         notesViewModel = notesViewModel,
                         settingsViewModel = settingsViewModel,
-                        initialNoteId = initialNoteId
+                        initialNoteId = pendingNoteIdState.value,
+                        onNoteIdConsumed = { pendingNoteIdState.value = 0L }
                     )
                 }
             }
         }
     }
 
+    // 可观察的 noteId：支持热启动时通知点击跳转（onNewIntent 更新此值触发重组）
+    private lateinit var pendingNoteIdState: androidx.compose.runtime.MutableState<Long>
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // 通知点击再次进入时也跳转：通过 setContent 重新读取 intent（这里仅触发一次重组即可）
-        // 由于 navController 在 Composable 内创建，这里通过重建 intent 后由系统重组触发
+        // 由通知热启动再次进入时，更新 pendingNoteId 触发重组，导航到对应笔记
+        val noteId = noteIdFromIntent(intent)
+        if (noteId > 0L && ::pendingNoteIdState.isInitialized) {
+            pendingNoteIdState.value = noteId
+        }
     }
 }

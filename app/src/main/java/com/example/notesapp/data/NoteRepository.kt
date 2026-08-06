@@ -29,6 +29,9 @@ class NoteRepository(private val noteDao: NoteDao) {
         noteDao.insert(note.copy(isTrashed = false, trashedAt = 0L))
     }
 
+    // 原子翻转置顶状态
+    suspend fun togglePin(id: Long) = noteDao.togglePin(id)
+
     suspend fun clearTrashed() = noteDao.clearTrashed()
 
     // 清理在回收站中超过指定时长的笔记，返回前无需结果

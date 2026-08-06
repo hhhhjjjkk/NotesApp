@@ -311,18 +311,22 @@ fun HomeScreen(
                     )
                     val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)
                     val primary = MaterialTheme.colorScheme.primary
+                    // 缓存 Brush，避免每次重组都新建
+                    val fabBrush = remember(primary) {
+                        Brush.radialGradient(
+                            colors = listOf(
+                                primary.copy(alpha = 0.92f),
+                                primary.copy(alpha = 0.62f)
+                            )
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .size(52.dp)
                             .then(scaleMod)
                             .shadow(8.dp, CircleShape)
                             .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        primary.copy(alpha = 0.92f),
-                                        primary.copy(alpha = 0.62f)
-                                    )
-                                ),
+                                brush = fabBrush,
                                 shape = CircleShape
                             )
                             .clickable(

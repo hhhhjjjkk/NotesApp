@@ -54,4 +54,8 @@ interface NoteDao {
     // 清零已触发的提醒，避免下次保存时又被重新调度
     @Query("UPDATE notes SET reminderAt = 0 WHERE id = :id")
     suspend fun clearReminder(id: Long)
+
+    // 原子翻转置顶状态，避免基于陈旧 note 对象翻转导致快速双击结果错误
+    @Query("UPDATE notes SET isPinned = NOT isPinned WHERE id = :id")
+    suspend fun togglePin(id: Long)
 }

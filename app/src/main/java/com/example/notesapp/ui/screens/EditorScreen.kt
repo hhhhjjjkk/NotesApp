@@ -163,9 +163,11 @@ fun EditorScreen(
         }.show()
     }
 
-    LaunchedEffect(noteId) {
-        if (!noteLoaded) {
-            existingNote?.let {
+    // key 含 existingNote：冷启动经通知深链直达编辑页时，allActiveNotes 首帧为空，
+    // existingNote 为 null；待 DB 发射、existingNote 变非空后 effect 需重跑加载
+    LaunchedEffect(noteId, existingNote) {
+        if (!noteLoaded && existingNote != null) {
+            existingNote.let {
                 title = it.title
                 content = it.content
                 selectedColor = it.color

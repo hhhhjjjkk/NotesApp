@@ -41,17 +41,19 @@ fun NotesNavHost(
     notesViewModel: NotesViewModel,
     settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
-    initialNoteId: Long = 0L
+    initialNoteId: Long = 0L,
+    onNoteIdConsumed: () -> Unit = {}
 ) {
     val animSpeed by settingsViewModel.animSpeed.collectAsStateWithLifecycle()
     val duration = animDuration(animSpeed)
     // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
 
-    // 通知点击进入时跳转到对应笔记编辑页
+    // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
         if (initialNoteId > 0L) {
             navController.navigate(Screen.Editor.createRoute(initialNoteId))
+            onNoteIdConsumed()
         }
     }
 
