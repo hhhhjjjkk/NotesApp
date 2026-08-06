@@ -36,8 +36,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,14 +62,14 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit
 ) {
-    val themeMode by viewModel.themeMode.collectAsState()
-    val themeColor by viewModel.themeColor.collectAsState()
-    val cardRadius by viewModel.cardRadius.collectAsState()
-    val cardShadow by viewModel.cardShadow.collectAsState()
-    val cardTransparency by viewModel.cardTransparency.collectAsState()
-    val backgroundUri by viewModel.backgroundUri.collectAsState()
-    val backgroundDim by viewModel.backgroundDim.collectAsState()
-    val animSpeed by viewModel.animSpeed.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val themeColor by viewModel.themeColor.collectAsStateWithLifecycle()
+    val cardRadius by viewModel.cardRadius.collectAsStateWithLifecycle()
+    val cardShadow by viewModel.cardShadow.collectAsStateWithLifecycle()
+    val cardTransparency by viewModel.cardTransparency.collectAsStateWithLifecycle()
+    val backgroundUri by viewModel.backgroundUri.collectAsStateWithLifecycle()
+    val backgroundDim by viewModel.backgroundDim.collectAsStateWithLifecycle()
+    val animSpeed by viewModel.animSpeed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val isSystemDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
@@ -242,6 +245,8 @@ fun SettingsScreen(
 
             // 笔记卡片透明度：让自定义背景图透过卡片显示
             SettingsSectionTitle(stringResource(R.string.card_transparency))
+            // 本地缓存滑块值，拖动时不立即写 DataStore，松手时再写，避免每帧 IO
+            var localCardTransparency by remember(cardTransparency) { mutableStateOf(cardTransparency) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -255,15 +260,16 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "${(cardTransparency * 100).toInt()}%",
+                    text = "${(localCardTransparency * 100).toInt()}%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
             Slider(
-                value = cardTransparency,
-                onValueChange = { viewModel.setCardTransparency(it) },
+                value = localCardTransparency,
+                onValueChange = { localCardTransparency = it },
+                onValueChangeFinished = { viewModel.setCardTransparency(localCardTransparency) },
                 valueRange = 0f..1f,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -282,6 +288,7 @@ fun SettingsScreen(
 
             // 动画速度：调节页面过渡和滑块动画的快慢
             SettingsSectionTitle(stringResource(R.string.anim_speed))
+            var localAnimSpeed by remember(animSpeed) { mutableStateOf(animSpeed) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -295,15 +302,16 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "${(animSpeed * 100).toInt()}%",
+                    text = "${(localAnimSpeed * 100).toInt()}%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
             Slider(
-                value = animSpeed,
-                onValueChange = { viewModel.setAnimSpeed(it) },
+                value = localAnimSpeed,
+                onValueChange = { localAnimSpeed = it },
+                onValueChangeFinished = { viewModel.setAnimSpeed(localAnimSpeed) },
                 valueRange = 0f..1f,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -368,6 +376,7 @@ fun SettingsScreen(
             // 背景透明度滑块：仅在有自定义背景时显示
             if (backgroundUri != null) {
                 Spacer(modifier = Modifier.height(16.dp))
+                var localBackgroundDim by remember(backgroundDim) { mutableStateOf(backgroundDim) }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -381,15 +390,16 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "${(backgroundDim * 100).toInt()}%",
+                        text = "${(localBackgroundDim * 100).toInt()}%",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
                 Slider(
-                    value = backgroundDim,
-                    onValueChange = { viewModel.setBackgroundDim(it) },
+                    value = localBackgroundDim,
+                    onValueChange = { localBackgroundDim = it },
+                    onValueChangeFinished = { viewModel.setBackgroundDim(localBackgroundDim) },
                     valueRange = 0f..1f,
                     modifier = Modifier
                         .fillMaxWidth()

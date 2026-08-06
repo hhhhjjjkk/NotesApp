@@ -28,9 +28,9 @@ import com.example.notesapp.ui.screens.TrashScreen
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
-// animSpeed 0f~1f → duration 900ms~300ms（默认更舒缓，仍可通过滑块调节）
+// animSpeed 0f~1f → duration 450ms~150ms（默认更利落，仍可通过滑块调节）
 private fun animDuration(animSpeed: Float): Int =
-    (900 - (animSpeed * 600).toInt()).coerceIn(300, 900)
+    (450 - (animSpeed * 300).toInt()).coerceIn(150, 450)
 
 // Material 3 Emphasized 缓动：进入用减速曲线（起步利落、收尾轻柔，自然停住）
 private val emphasizedDecel = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
@@ -47,6 +47,8 @@ fun NotesNavHost(
 ) {
     val animSpeed by settingsViewModel.animSpeed.collectAsStateWithLifecycle()
     val duration = animDuration(animSpeed)
+    // 进入用稍短一点的 fade，避免页面透明时间过长显得拖
+    val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
 
     // 通知点击进入时跳转到对应笔记编辑页
     LaunchedEffect(initialNoteId) {
@@ -57,10 +59,10 @@ fun NotesNavHost(
 
     // 进入：减速曲线，页面“稳稳停住”
     val enterSlideSpec = { tween<IntOffset>(duration, easing = emphasizedDecel) }
-    val enterFadeSpec = { tween<Float>(duration, easing = emphasizedDecel) }
+    val enterFadeSpec = { tween<Float>(fadeDuration, easing = emphasizedDecel) }
     // 退出：加速曲线，页面“自然离开”
     val exitSlideSpec = { tween<IntOffset>(duration, easing = emphasizedAccel) }
-    val exitFadeSpec = { tween<Float>(duration, easing = emphasizedAccel) }
+    val exitFadeSpec = { tween<Float>(fadeDuration, easing = emphasizedAccel) }
 
     // 首页：不移动，被覆盖 / 被揭开，避免割裂感
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
@@ -76,7 +78,7 @@ fun NotesNavHost(
         ExitTransition.None
     }
 
-    // 二级页面：滑入/滑出叠加淡入/淡出，让边缘过渡更柔和，避免硬切
+    // 二级页面：进入叠加轻 fade 让边缘更柔和；返回时仅滑动退出，避免页面变透明露出首页显得拖
     val secondaryEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         slideInHorizontally(enterSlideSpec()) { fullWidth -> fullWidth } +
             fadeIn(enterFadeSpec())
@@ -86,12 +88,10 @@ fun NotesNavHost(
             fadeOut(exitFadeSpec())
     }
     val secondaryPopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(enterSlideSpec()) { fullWidth -> -fullWidth } +
-            fadeIn(enterFadeSpec())
+        slideInHorizontally(enterSlideSpec()) { fullWidth -> -fullWidth }
     }
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth } +
-            fadeOut(exitFadeSpec())
+        slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
 
     NavHost(

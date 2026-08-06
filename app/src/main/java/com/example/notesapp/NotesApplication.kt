@@ -27,7 +27,7 @@ class NotesApplication : Application() {
         // 后台预热数据库：在 IO 线程打开 SQLite 文件并完成 Room 代理初始化，
         // 避免首屏查询时才触发，造成 UI 卡顿。
         appScope.launch {
-            runCatching {
+            try {
                 val db = NoteDatabase.getInstance(this@NotesApplication)
                 db.openHelper.writableDatabase
                 // 恢复所有未触发的提醒闹钟
@@ -36,6 +36,11 @@ class NotesApplication : Application() {
                 pendingNotes.forEach { note ->
                     NotificationScheduler.schedule(this@NotesApplication, note)
                 }
+                // 自动清理：物理删除移入回收站超过 30 天的笔记，避免无限堆积
+                val thirtyDaysAgo = now - 30L * 24 * 60 * 60 * 1000
+                db.noteDao().clearTrashedBefore(thirtyDaysAgo)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
             }
         }
     }

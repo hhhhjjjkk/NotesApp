@@ -54,8 +54,11 @@ fun NotesAppTheme(
 ) {
     val accent = themeColor.toComposeColor()
     val hasCustomBackground = !backgroundUri.isNullOrBlank()
-    // 有自定义背景时，background 和 surface 都改为半透明遮罩色，让背景图透过 Scaffold 显示
-    val resolvedBackground = resolveBackgroundColor(hasCustomBackground, darkTheme, backgroundDim)
+    // 有自定义背景时：background 设为透明，让 AppBackground 单独负责绘制背景图+遮罩，
+    // 避免 Scaffold.containerColor 再叠一层遮罩导致实际比 dim 设置值更暗（双遮罩叠加）
+    // 无自定义背景时：使用正常不透明背景色
+    val resolvedBackground = if (hasCustomBackground) Color.Transparent
+        else resolveBackgroundColor(hasCustomBackground, darkTheme, backgroundDim)
     // surface 比 background 略不透明，保留层次感但避免色差过大
     val resolvedSurface = if (hasCustomBackground) {
         resolveBackgroundColor(hasCustomBackground, darkTheme, (backgroundDim + 0.08f).coerceAtMost(0.92f))
@@ -88,7 +91,9 @@ fun NotesAppTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
+            // 递归解包 ContextWrapper 找到 Activity，避免在非 Activity 上下文强转崩溃
+            val activity = view.context.findActivity() ?: return@SideEffect
+            val window = activity.window
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
@@ -119,3 +124,11 @@ fun NotesAppTheme(
         content = content
     )
 }
+
+/** 递归解包 ContextWrapper 找到 Activity，找不到返回 null。 */
+private tailrec fun android.content.Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is android.content.ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }

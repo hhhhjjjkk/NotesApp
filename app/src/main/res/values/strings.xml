@@ -62,5 +62,5 @@
     <string name="confirm">确定</string>
     <!-- 动画速度 -->
     <string name="anim_speed">动画速度</string>
-    <string name="anim_speed_hint">数值越大动画越快，越小越慢</string>
+    <string name="anim_speed_hint">数值越大动画越快，越小越慢（150ms~450ms）</string>
 </resources>

@@ -54,12 +54,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,14 +94,14 @@ fun HomeScreen(
     onTrashClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val notes by viewModel.notes.collectAsState()
+    val notes by viewModel.notes.collectAsStateWithLifecycle()
     val searchQuery = viewModel.currentSearchQuery
-    val noteType by viewModel.noteType.collectAsState()
+    val noteType by viewModel.noteType.collectAsStateWithLifecycle()
 
-    val themeMode by settingsViewModel.themeMode.collectAsState()
-    val cardRadius by settingsViewModel.cardRadius.collectAsState()
-    val cardShadow by settingsViewModel.cardShadow.collectAsState()
-    val cardTransparency by settingsViewModel.cardTransparency.collectAsState()
+    val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+    val cardRadius by settingsViewModel.cardRadius.collectAsStateWithLifecycle()
+    val cardShadow by settingsViewModel.cardShadow.collectAsStateWithLifecycle()
+    val cardTransparency by settingsViewModel.cardTransparency.collectAsStateWithLifecycle()
     val isSystemDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
         ThemeMode.LIGHT -> false

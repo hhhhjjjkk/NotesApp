@@ -8,8 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
@@ -51,10 +51,10 @@ class MainActivity : ComponentActivity() {
                 NotesViewModel(repository, app)
             }
 
-            val themeMode by settingsViewModel.themeMode.collectAsState()
-            val themeColor by settingsViewModel.themeColor.collectAsState()
-            val backgroundUri by settingsViewModel.backgroundUri.collectAsState()
-            val backgroundDim by settingsViewModel.backgroundDim.collectAsState()
+            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+            val themeColor by settingsViewModel.themeColor.collectAsStateWithLifecycle()
+            val backgroundUri by settingsViewModel.backgroundUri.collectAsStateWithLifecycle()
+            val backgroundDim by settingsViewModel.backgroundDim.collectAsStateWithLifecycle()
             val darkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
