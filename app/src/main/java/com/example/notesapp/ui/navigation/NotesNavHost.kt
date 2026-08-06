@@ -3,7 +3,7 @@ package com.example.notesapp.ui.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -32,10 +32,8 @@ import com.example.notesapp.ui.viewmodel.SettingsViewModel
 private fun animDuration(animSpeed: Float): Int =
     (450 - (animSpeed * 300).toInt()).coerceIn(150, 450)
 
-// Material 3 Emphasized 缓动：进入用减速曲线（起步利落、收尾轻柔，自然停住）
-private val emphasizedDecel = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
-// 退出用加速曲线（起步平稳、收尾利落，自然离开）
-private val emphasizedAccel = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
+// 统一使用对称缓动曲线（先加速后减速），进入和退出速度感受完全一致
+private val sharedEasing = FastOutSlowInEasing
 
 @Composable
 fun NotesNavHost(
@@ -47,7 +45,7 @@ fun NotesNavHost(
 ) {
     val animSpeed by settingsViewModel.animSpeed.collectAsStateWithLifecycle()
     val duration = animDuration(animSpeed)
-    // 进入用稍短一点的 fade，避免页面透明时间过长显得拖
+    // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
 
     // 通知点击进入时跳转到对应笔记编辑页
@@ -57,16 +55,15 @@ fun NotesNavHost(
         }
     }
 
-    // 进入：减速曲线，页面“稳稳停住”
-    val enterSlideSpec = { tween<IntOffset>(duration, easing = emphasizedDecel) }
-    val enterFadeSpec = { tween<Float>(fadeDuration, easing = emphasizedDecel) }
-    // 退出：加速曲线，页面“自然离开”
-    val exitSlideSpec = { tween<IntOffset>(duration, easing = emphasizedAccel) }
-    val exitFadeSpec = { tween<Float>(fadeDuration, easing = emphasizedAccel) }
+    // 进入退出共用同一缓动曲线和同一 duration，速度完全一致
+    val enterSlideSpec = { tween<IntOffset>(duration, easing = sharedEasing) }
+    val enterFadeSpec = { tween<Float>(fadeDuration, easing = sharedEasing) }
+    val exitSlideSpec = { tween<IntOffset>(duration, easing = sharedEasing) }
+    val exitFadeSpec = { tween<Float>(fadeDuration, easing = sharedEasing) }
 
     // 首页：不移动，被覆盖 / 被揭开，避免割裂感
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(tween(duration, easing = emphasizedDecel))
+        fadeIn(tween(duration, easing = sharedEasing))
     }
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         ExitTransition.None
