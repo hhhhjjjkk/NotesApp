@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,11 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -88,11 +83,6 @@ fun LiquidSegmentedSlider(
         }
     }
 
-    // 轨道（凹陷玻璃槽）配色
-    val trackBase = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.16f)
-    val trackTopShadow = if (isDark) Color.Black.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.07f)
-    val trackBottomLight = if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.20f)
-
     // 主题色：用于实时跟随滑块的染色高光带
     val primary = MaterialTheme.colorScheme.primary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -100,29 +90,9 @@ fun LiquidSegmentedSlider(
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
-            .clip(CircleShape)
             .drawBehind {
+                // 实时跟随滑块的主题色染色带，无底色、无渐变、无描边，彻底去框
                 val h = size.height
-                // 基础底色
-                drawRect(trackBase)
-                // 顶部内阴影：凹陷感
-                drawRect(
-                    Brush.verticalGradient(
-                        colors = listOf(trackTopShadow, Color.Transparent),
-                        startY = 0f,
-                        endY = h * 0.22f
-                    )
-                )
-                // 底部内高光：反光
-                drawRect(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, trackBottomLight),
-                        startY = h * 0.65f,
-                        endY = h
-                    )
-                )
-                // 实时跟随滑块的主题色染色带：只有滑块覆盖到的地方变色，
-                // 随 animOffset 实时移动（拖动 snapTo / 释放 animateTo 均逐帧刷新），无延迟。
                 val thumbW = (size.width - 2 * padPx) / 2f
                 if (thumbW > 0f) {
                     val bx = padPx + animOffset.value * thumbW
@@ -166,38 +136,18 @@ fun LiquidSegmentedSlider(
         val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
         val thumbOffsetPx = animOffset.value * thumbWidthPx
 
-        // 滑块（凸起玻璃）配色：在原基础上叠加主题色，让"覆盖处"呈现明显变色
-        val thumbTop = if (isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.55f)
-        val thumbBottom = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.26f)
-    // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
+        // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
         val thumbTint = primary.copy(alpha = if (isDark) 0.10f else 0.08f)
 
-        // 滑块：保留主题色染色随手指实时位移；移除 realGlassBlur 与多层玻璃高光，
-        // 仅保留轻投影与基础渐变，避免视觉上出现明显"框"
+        // 滑块：保留主题色染色随手指实时位移；去掉所有玻璃渐变、投影、clip，
+        // 仅保留基础背景色与主题色染色，彻底消除视觉"框"
         Box(
             modifier = Modifier
                 .padding(vertical = padDp)
                 .offset { IntOffset((padPx + thumbOffsetPx).roundToInt(), 0) }
                 .width(thumbWidthDp)
                 .fillMaxHeight()
-                .shadow(
-                    elevation = 5.dp,
-                    shape = CircleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.10f),
-                    spotColor = Color.Black.copy(alpha = 0.18f)
-                )
-                .clip(CircleShape)
                 .drawBehind {
-                    val h = size.height
-                    // 基础渐变：上亮下暗，模拟玻璃受光
-                    drawRect(
-                        Brush.verticalGradient(
-                            colors = listOf(thumbTop, thumbBottom),
-                            startY = 0f,
-                            endY = h
-                        )
-                    )
-                    // 主题色染色层：覆盖区域明显变色
                     drawRect(thumbTint)
                 }
         )

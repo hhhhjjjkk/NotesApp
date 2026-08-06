@@ -153,11 +153,8 @@ fun NoteCard(
                 ),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = shape,
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = if (shadowEnabled) 2.dp else 0.dp
-            ),
-            // 仅选中态显示强调色描边；非选中态不画任何边框，
-            // 彻底移除液态玻璃高光，避免出现明显的长方形框
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            // 彻底去框：非选中态不画任何边框、阴影、高光
             border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
         ) {
         Box {
