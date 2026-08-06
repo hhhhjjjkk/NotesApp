@@ -32,21 +32,17 @@ import androidx.compose.material.icons.filled.AlarmOn
 import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -102,8 +98,6 @@ fun EditorScreen(
     var selectedColor by rememberSaveable { mutableStateOf(0) }
     var isPinned by rememberSaveable { mutableStateOf(false) }
     var noteLoaded by rememberSaveable { mutableStateOf(false) }
-    var showMarkdownHelp by rememberSaveable { mutableStateOf(false) }
-    val markdownHelpSheetState = rememberModalBottomSheetState()
 
     // 提醒相关状态（全部 rememberSaveable，旋转屏后保留）
     var reminderAt by rememberSaveable { mutableStateOf(0L) }
@@ -438,13 +432,6 @@ fun EditorScreen(
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = { showMarkdownHelp = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Markdown 语法",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
         }
@@ -488,67 +475,6 @@ fun EditorScreen(
                     Text(stringResource(R.string.cancel))
                 }
             }
-        )
-    }
-
-    // Markdown 语法提示弹窗
-    if (showMarkdownHelp) {
-        ModalBottomSheet(
-            onDismissRequest = { showMarkdownHelp = false },
-            sheetState = markdownHelpSheetState,
-            containerColor = MaterialTheme.colorScheme.surface
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp)
-                    .padding(bottom = 24.dp)
-            ) {
-                Text(
-                    text = "Markdown 语法速查",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                MarkdownHelpItem("# 标题", "一级标题")
-                MarkdownHelpItem("## 小标题", "二级标题")
-                MarkdownHelpItem("- 列表项", "无序列表")
-                MarkdownHelpItem("1. 列表项", "有序列表")
-                MarkdownHelpItem("**加粗文本**", "加粗显示")
-                MarkdownHelpItem("*斜体文本*", "斜体显示")
-
-                Spacer(modifier = Modifier.padding(top = 16.dp))
-                Text(
-                    text = "提示：在首页卡片中会自动渲染这些语法。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MarkdownHelpItem(syntax: String, description: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-    ) {
-        Text(
-            text = syntax,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

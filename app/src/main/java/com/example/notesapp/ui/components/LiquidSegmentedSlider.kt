@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,11 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -125,24 +120,13 @@ fun LiquidSegmentedSlider(
         val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
         val thumbOffsetPx = animOffset.value * thumbWidthPx
 
-        // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
-        val thumbTint = primary.copy(alpha = if (isDark) 0.10f else 0.08f)
-        // 滑块实体底色：surface 色让滑块可见，叠加主题色染色让覆盖处变色，无渐变无边框
-        val thumbBase = MaterialTheme.colorScheme.surface
-
-        // 滑块：surface 实体底色 + 主题色染色，随手指实时位移；
-        // 圆角裁剪保留，无玻璃、无阴影、无渐变，彻底消除视觉"框"
+        // 滑块：完全透明，无任何底色/染色/渐变，仅靠文字颜色变化指示选中状态
         Box(
             modifier = Modifier
                 .padding(vertical = padDp)
                 .offset { IntOffset((padPx + thumbOffsetPx).roundToInt(), 0) }
                 .width(thumbWidthDp)
                 .fillMaxHeight()
-                .clip(CircleShape)
-                .drawBehind {
-                    drawRect(thumbBase)
-                    drawRect(thumbTint)
-                }
         )
 
         // 左右文字：颜色随滑块实时插值（lerp），不再等 selected 切换后才变色——彻底消除"颜色延迟跟随"
