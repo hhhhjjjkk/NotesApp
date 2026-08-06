@@ -158,9 +158,9 @@ fun NoteCard(
             elevation = CardDefaults.cardElevation(
                 defaultElevation = if (shadowEnabled) 2.dp else 0.dp
             ),
-            // 选中态用强调色描边，否则按原逻辑
-            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-            else if (!shadowEnabled) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
+            // 仅选中态显示强调色描边；非选中态不画实色边框，
+            // 卡片边缘由 liquidGlassSurface 的玻璃高光负责，避免出现明显的长方形框
+            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
         ) {
         Box {
             Row(modifier = Modifier.fillMaxWidth()) {
