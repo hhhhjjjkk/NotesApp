@@ -184,7 +184,15 @@ fun HomeScreen(
         floatingActionButton = {
             // FAB 已移到底部滑块同一 Row，避免与滑块重叠
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            // 向上抬升，避开底部切换滑块，避免提示被滑块遮挡
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(bottom = 84.dp)
+            )
+        },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(
