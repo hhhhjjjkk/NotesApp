@@ -92,20 +92,6 @@ fun LiquidSegmentedSlider(
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
-            .clip(CircleShape)
-            .drawBehind {
-                // 实时跟随滑块的主题色染色带，无底色、无渐变、无描边，彻底去框
-                val h = size.height
-                val thumbW = (size.width - 2 * padPx) / 2f
-                if (thumbW > 0f) {
-                    val bx = padPx + animOffset.value * thumbW
-                    drawRect(
-                        color = primary.copy(alpha = 0.12f),
-                        topLeft = Offset(bx, 0f),
-                        size = Size(thumbW, h)
-                    )
-                }
-            }
             .onSizeChanged { widthPx = it.width.toFloat() }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
