@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
@@ -90,6 +92,7 @@ fun LiquidSegmentedSlider(
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
+            .clip(CircleShape)
             .drawBehind {
                 // 实时跟随滑块的主题色染色带，无底色、无渐变、无描边，彻底去框
                 val h = size.height
@@ -147,6 +150,7 @@ fun LiquidSegmentedSlider(
                 .offset { IntOffset((padPx + thumbOffsetPx).roundToInt(), 0) }
                 .width(thumbWidthDp)
                 .fillMaxHeight()
+                .clip(CircleShape)
                 .drawBehind {
                     drawRect(thumbTint)
                 }
