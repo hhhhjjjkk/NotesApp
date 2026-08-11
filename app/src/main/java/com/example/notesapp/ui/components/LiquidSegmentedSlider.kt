@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,7 +27,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -35,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.data.NoteType
+import com.example.notesapp.ui.theme.realGlassBlur
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -84,9 +93,47 @@ fun LiquidSegmentedSlider(
     val primary = MaterialTheme.colorScheme.primary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
+    // 轨道（凹陷玻璃槽）配色
+    val trackBase = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.16f)
+    val trackTopShadow = if (isDark) Color.Black.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.07f)
+    val trackBottomLight = if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.20f)
+
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
+            .clip(CircleShape)
+            .drawBehind {
+                val h = size.height
+                // 基础底色
+                drawRect(trackBase)
+                // 顶部内阴影：凹陷感
+                drawRect(
+                    Brush.verticalGradient(
+                        colors = listOf(trackTopShadow, Color.Transparent),
+                        startY = 0f,
+                        endY = h * 0.22f
+                    )
+                )
+                // 底部内高光：反光
+                drawRect(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, trackBottomLight),
+                        startY = h * 0.65f,
+                        endY = h
+                    )
+                )
+                // 实时跟随滑块的主题色染色带：只有滑块覆盖到的地方变色，
+                // 随 animOffset 实时移动（拖动 snapTo / 释放 animateTo 均逐帧刷新），无延迟。
+                val thumbW = (size.width - 2 * padPx) / 2f
+                if (thumbW > 0f) {
+                    val bx = padPx + animOffset.value * thumbW
+                    drawRect(
+                        color = primary.copy(alpha = 0.12f),
+                        topLeft = Offset(bx, 0f),
+                        size = Size(thumbW, h)
+                    )
+                }
+            }
             .onSizeChanged { widthPx = it.width.toFloat() }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
@@ -119,7 +166,16 @@ fun LiquidSegmentedSlider(
         val thumbWidthDp = (maxWidth - padDp * 2) / 2
         val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
 
-        // 滑块：完全透明，无任何底色/染色/渐变，仅靠文字颜色变化指示选中状态
+        // 滑块（凸起玻璃）配色：在原基础上叠加主题色，让"覆盖处"呈现明显变色
+        val thumbTop = if (isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.55f)
+        val thumbBottom = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.26f)
+        val thumbSpecular = if (isDark) Color.White.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.80f)
+        val thumbShade = if (isDark) Color.Black.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.06f)
+        // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
+        val thumbTint = primary.copy(alpha = if (isDark) 0.10f else 0.08f)
+
+        // 滑块：液态玻璃材质，随手指实时位移
+        // realGlassBlur 在 Android 12+ 对玻璃层做真实高斯模糊，告别"塑料感"
         // offset 用 lambda 延迟读取 animOffset.value，避免动画每帧触发组合阶段重组
         Box(
             modifier = Modifier
@@ -132,6 +188,43 @@ fun LiquidSegmentedSlider(
                 }
                 .width(thumbWidthDp)
                 .fillMaxHeight()
+                .shadow(
+                    elevation = 5.dp,
+                    shape = CircleShape,
+                    ambientColor = Color.Black.copy(alpha = 0.10f),
+                    spotColor = Color.Black.copy(alpha = 0.18f)
+                )
+                .clip(CircleShape)
+                .realGlassBlur(8.dp)
+                .drawBehind {
+                    val h = size.height
+                    // 基础渐变：上亮下暗，模拟玻璃受光
+                    drawRect(
+                        Brush.verticalGradient(
+                            colors = listOf(thumbTop, thumbBottom),
+                            startY = 0f,
+                            endY = h
+                        )
+                    )
+                    // 主题色染色层：覆盖区域明显变色
+                    drawRect(thumbTint)
+                    // 顶部窄高光：镜面反射
+                    drawRect(
+                        Brush.verticalGradient(
+                            colors = listOf(thumbSpecular, Color.Transparent),
+                            startY = 0f,
+                            endY = h * 0.42f
+                        )
+                    )
+                    // 底部柔阴影：体积感
+                    drawRect(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, thumbShade),
+                            startY = h * 0.55f,
+                            endY = h
+                        )
+                    )
+                }
         )
 
         // 左右文字：颜色随滑块实时插值（lerp），不再等 selected 切换后才变色——彻底消除"颜色延迟跟随"

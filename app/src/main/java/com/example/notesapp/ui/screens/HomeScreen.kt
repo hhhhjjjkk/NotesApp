@@ -77,6 +77,7 @@ import com.example.notesapp.ui.components.EmptyState
 import com.example.notesapp.ui.components.LiquidSegmentedSlider
 import com.example.notesapp.ui.components.NoteCard
 import com.example.notesapp.ui.components.SearchBar
+import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.rememberPressableGlassScale
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
@@ -329,6 +330,11 @@ fun HomeScreen(
                                 brush = fabBrush,
                                 shape = CircleShape
                             )
+                            .liquidGlassSurface(
+                                shape = CircleShape,
+                                isDark = isDark,
+                                borderWidth = 1.5.dp
+                            )
                             .clickable(
                                 interactionSource = fabSrc,
                                 indication = null,
@@ -372,6 +378,11 @@ fun HomeScreen(
                         .background(
                             MaterialTheme.colorScheme.surface,
                             RoundedCornerShape(28.dp)
+                        )
+                        .liquidGlassSurface(
+                            shape = RoundedCornerShape(28.dp),
+                            isDark = isDark,
+                            borderWidth = 1.dp
                         )
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                         .animateContentSize(animationSpec = tween(250)),
