@@ -75,6 +75,9 @@ dependencies {
     // SplashScreen（消除冷启动白屏，适配 Android 12+）
     implementation(libs.androidx.core.splashscreen)
 
+    // Haze：真实背景模糊，用于毛玻璃（frosted glass）效果
+    implementation(libs.androidx.haze)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

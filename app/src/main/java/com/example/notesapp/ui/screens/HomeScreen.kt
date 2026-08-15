@@ -74,6 +74,8 @@ import com.example.notesapp.R
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.ThemeMode
 import com.example.notesapp.ui.components.EmptyState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
 import com.example.notesapp.ui.components.LiquidSegmentedSlider
 import com.example.notesapp.ui.components.NoteCard
 import com.example.notesapp.ui.components.SearchBar
@@ -111,6 +113,9 @@ fun HomeScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // 毛玻璃模糊状态：背景（笔记列表）与前景（切换器）共享，实现真实背景模糊
+    val hazeState = remember { HazeState() }
 
     // 长按选中的笔记，用于底部弹窗
     var sheetNote by remember { mutableStateOf<Note?>(null) }
@@ -218,6 +223,7 @@ fun HomeScreen(
                     columns = StaggeredGridCells.Adaptive(160.dp),
                     modifier = Modifier
                         .fillMaxSize()
+                        .haze(hazeState)
                         .padding(top = 72.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -308,6 +314,7 @@ fun HomeScreen(
                         leftLabel = stringResource(R.string.tab_note),
                         rightLabel = stringResource(R.string.tab_todo),
                         isDark = isDark,
+                        hazeState = hazeState,
                         modifier = Modifier.weight(1f)
                     )
                     val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)

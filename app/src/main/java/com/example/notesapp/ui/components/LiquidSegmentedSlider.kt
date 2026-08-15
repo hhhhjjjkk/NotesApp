@@ -47,6 +47,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.data.NoteType
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -70,7 +73,8 @@ fun LiquidSegmentedSlider(
     leftLabel: String,
     rightLabel: String,
     isDark: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hazeState: HazeState? = null
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -108,9 +112,18 @@ fun LiquidSegmentedSlider(
     val trackEdge = if (isDark) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.60f)
     val trackTint = primary.copy(alpha = if (isDark) 0.16f else 0.12f)
 
+    // 毛玻璃轨道样式：Haze 真实背景模糊 + 半透明磨砂染色
+    val trackHazeStyle = HazeStyle(
+        tint = if (isDark) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.55f),
+        blurRadius = 24.dp,
+        noiseFactor = 0.12f
+    )
+
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
+            // 毛玻璃模式：轨道注册为 hazeChild，由背景端 Haze 模糊透出下方内容
+            .then(if (hazeState != null) Modifier.hazeChild(hazeState, CircleShape, trackHazeStyle) else Modifier)
             .shadow(
                 elevation = 2.dp,
                 shape = CircleShape,
@@ -121,8 +134,10 @@ fun LiquidSegmentedSlider(
                 val h = size.height
                 val corner = CornerRadius(h / 2f)
 
-                // 基础底色：半透明白，让背景透出
-                drawRoundRect(trackBase, cornerRadius = corner)
+                // 基础底色：半透明白，让背景透出（毛玻璃模式下跳过，底色由 Haze 模糊 + tint 提供）
+                if (hazeState == null) {
+                    drawRoundRect(trackBase, cornerRadius = corner)
+                }
 
                 // 顶部内阴影：凹陷感
                 drawRoundRect(
