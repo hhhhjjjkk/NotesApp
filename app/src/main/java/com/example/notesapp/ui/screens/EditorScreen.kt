@@ -80,6 +80,13 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+/**
+ * 编辑页底部浮动颜色条的总占位高度。
+ * 颜色条实际高度 = 内容 48dp(IconButton) + 内边距 10dp*2 + 外边距 10dp*2 = 88dp，
+ * 再额外预留 8dp 视觉间隔，确保正文最后一行不被颜色条遮挡。
+ */
+private val ColorBarReservedHeight = 96.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
@@ -378,8 +385,10 @@ fun EditorScreen(
                         innerTextField()
                     }
                 )
-                // 为浮动颜色条预留空间，避免最后一行被遮挡
-                Spacer(modifier = Modifier.height(84.dp))
+                // 为浮动颜色条预留空间，避免最后一行被遮挡。
+                // 颜色条实际高度 = 内容 48dp(IconButton) + 内边距 10dp*2 + 外边距 10dp*2 = 88dp，
+                // 这里再多留 8dp 视觉间隔，避免正文最后一行紧贴颜色条。
+                Spacer(modifier = Modifier.height(ColorBarReservedHeight))
             }
 
             // 浮动颜色调节条：通过 imePadding 跟随键盘自动浮起

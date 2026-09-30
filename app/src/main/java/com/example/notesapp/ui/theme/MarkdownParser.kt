@@ -3,7 +3,9 @@ package com.example.notesapp.ui.theme
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 
 /**
  * 轻量级 Markdown 解析器，支持：
@@ -28,33 +30,51 @@ private val ORDERED_LIST_PARSE_REGEX = Regex("""^(\d+)\. (.*)""")
 
 /**
  * 将带有内联标记的字符串解析为 AnnotatedString，支持粗体和斜体。
+ *
+ * 实现说明：必须基于 [Regex.findAll] 的匹配位置逐段拼接，**不能**用 [Regex.split]。
+ * 因为 split 会丢弃分隔符本身，而 `**text**` 的正文位于捕获组内，
+ * 用 split 会得到 ["前半", "后半"]，导致被标记的文字整体丢失
+ * （例如 "普通**加粗**普通" 会被渲染成 "普通普通"）。
+ *
+ * 处理顺序：先粗体、再斜体；斜体只在非粗体片段内解析，避免 `**a**` 被斜体规则二次匹配。
  */
 fun parseInlineMarkdown(text: String): AnnotatedString {
     return buildAnnotatedString {
-        // 先处理粗体
-        val boldParts = BOLD_REGEX.split(text)
-        for (i in boldParts.indices) {
-            val part = boldParts[i]
-            if (i % 2 == 1) {
-                // 这部分是粗体内容
-                pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                append(part)
-                pop()
-            } else {
-                // 这部分可能包含斜体
-                val italicParts = ITALIC_REGEX.split(part)
-                for (j in italicParts.indices) {
-                    val italicPart = italicParts[j]
-                    if (j % 2 == 1) {
-                        pushStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
-                        append(italicPart)
-                        pop()
-                    } else {
-                        append(italicPart)
-                    }
-                }
+        var cursor = 0
+
+        for (boldMatch in BOLD_REGEX.findAll(text)) {
+            // 粗体标记之前的普通文本，其中可能还含有斜体
+            appendItalicSegment(text.substring(cursor, boldMatch.range.first))
+            // 粗体内容本身：整段加粗，内部不再解析斜体标记
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                append(boldMatch.groupValues[1])
             }
+            cursor = boldMatch.range.last + 1
         }
+
+        // 收尾：最后一段不含粗体标记的普通文本
+        if (cursor < text.length) {
+            appendItalicSegment(text.substring(cursor))
+        }
+    }
+}
+
+/**
+ * 向 [AnnotatedString.Builder] 追加一段文本，并解析其中的 `*斜体*` 标记。
+ * 同样基于匹配位置处理，确保斜体文字不会丢失。
+ */
+private fun AnnotatedString.Builder.appendItalicSegment(segment: String) {
+    var cursor = 0
+    for (italicMatch in ITALIC_REGEX.findAll(segment)) {
+        val before = segment.substring(cursor, italicMatch.range.first)
+        if (before.isNotEmpty()) append(before)
+        withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+            append(italicMatch.groupValues[1])
+        }
+        cursor = italicMatch.range.last + 1
+    }
+    if (cursor < segment.length) {
+        append(segment.substring(cursor))
     }
 }
 

@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.notesapp.R
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.ThemeMode
@@ -84,6 +85,18 @@ import com.example.notesapp.ui.theme.rememberPressableGlassScale
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
+
+/**
+ * 搜索栏占位高度：OutlinedTextField 默认 56dp + SearchBar 自身上下各 8dp 内边距 = 72dp。
+ * 列表顶部留白与此保持一致，避免硬编码数值分散在各处导致错位。
+ */
+private val SearchBarHeight = 72.dp
+
+/**
+ * 底部滑块行占位高度：滑块 44dp + 上下外边距 16dp*2 = 76dp。
+ * 用于 Snackbar 抬升与空状态底部避让，避免提示被滑块遮挡。
+ */
+private val BottomBarHeight = 76.dp
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -101,6 +114,8 @@ fun HomeScreen(
     val noteType by viewModel.noteType.collectAsStateWithLifecycle()
 
     val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+    val backgroundUri by settingsViewModel.backgroundUri.collectAsStateWithLifecycle()
+    val hasCustomBackground = !backgroundUri.isNullOrBlank()
     val cardRadius by settingsViewModel.cardRadius.collectAsStateWithLifecycle()
     val cardShadow by settingsViewModel.cardShadow.collectAsStateWithLifecycle()
     val cardTransparency by settingsViewModel.cardTransparency.collectAsStateWithLifecycle()
@@ -187,15 +202,16 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            // FAB 已移到底部滑块同一 Row，避免与滑块重叠
+            // FAB 与底部滑块同处一个 Row，此处刻意留空
         },
         snackbarHost = {
-            // 向上抬升，避开底部切换滑块，避免提示被滑块遮挡
+            // 向上抬升，避开底部切换滑块（滑块 44dp + 上下 16dp*2 外边距），
+            // 与 BottomBarHeight 保持一致，避免提示被滑块遮挡。
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .navigationBarsPadding()
-                    .padding(bottom = 84.dp)
+                    .padding(bottom = BottomBarHeight)
             )
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -206,25 +222,37 @@ fun HomeScreen(
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            // 搜索栏固定为顶部浮层：抬高层级，避免列表向上滚动时卡片文字从下方穿透。
+            // 默认纯色背景时加不透明底色遮挡穿透内容；自定义壁纸时保持透明，
+            // 以保留毛玻璃观感，不与背景层产生冲突。
             SearchBar(
                 query = searchQuery,
                 onQueryChange = viewModel::onSearchQueryChange,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        // 自定义壁纸下保持透明以保留毛玻璃观感
+                        if (hasCustomBackground) Modifier
+                        else Modifier.background(MaterialTheme.colorScheme.background)
+                    )
+                    .zIndex(1f)
             )
 
             if (notes.isEmpty()) {
                 EmptyState(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 80.dp)
+                        // 上下同时避让搜索栏与底部滑块，使空状态在剩余区域内居中
+                        .padding(top = SearchBarHeight + 16.dp, bottom = BottomBarHeight)
                 )
             } else {
+                // 顶部让出搜索栏高度，并额外留 12dp 呼吸间距，避免首行卡片贴住搜索栏
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Adaptive(160.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .haze(hazeState)
-                        .padding(top = 72.dp),
+                        .padding(top = SearchBarHeight + 12.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalItemSpacing = 8.dp

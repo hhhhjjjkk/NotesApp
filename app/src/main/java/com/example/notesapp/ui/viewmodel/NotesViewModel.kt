@@ -10,10 +10,14 @@ import com.example.notesapp.data.Note
 import com.example.notesapp.data.NoteRepository
 import com.example.notesapp.data.NoteType
 import com.example.notesapp.notification.NotificationScheduler
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -25,6 +29,9 @@ class NotesViewModel(
     companion object {
         const val ACTION_SEND = "android.intent.action.SEND"
         const val EXTRA_TEXT = "android.intent.extra.TEXT"
+
+        /** 搜索输入防抖时长：避免每次按键都触发一次数据库查询。 */
+        private const val SEARCH_DEBOUNCE_MS = 250L
     }
 
     private val searchQuery = MutableStateFlow("")
@@ -33,22 +40,24 @@ class NotesViewModel(
     private val currentType = MutableStateFlow(NoteType.NOTE)
     val noteType: StateFlow<Int> = currentType
 
-    // 首页列表：按当前 type 过滤，叠加搜索
+    // 首页列表：类型过滤与搜索全部下推到 SQL 执行，避免把整表读入内存再逐条过滤。
+    //
+    // 关键点：防抖不能直接作用在 searchQuery 上——那会让初始的空查询也延迟 250ms，
+    // 导致冷启动首页短暂空白（明明有笔记）。这里用「先取首帧、再对后续变化防抖」的
+    // 组合方式：初始值立即通过，只有用户真正输入时才进入防抖。
+    // 类型切换（滑块）必须是即时的，不参与防抖。
+    private val debouncedQuery: Flow<String> = searchQuery
+        .debounce { query -> if (query.isEmpty()) 0L else SEARCH_DEBOUNCE_MS }
+
     val notes: StateFlow<List<Note>> = combine(
-        searchQuery,
         currentType,
-        repository.getAllNotes()
-    ) { query, type, allNotes ->
-        val filtered = allNotes.filter { it.type == type }
-        if (query.isBlank()) {
-            filtered
-        } else {
-            filtered.filter {
-                it.title.contains(query, ignoreCase = true) ||
-                        it.content.contains(query, ignoreCase = true)
-            }
+        debouncedQuery
+    ) { type, query -> type to query }
+        .distinctUntilChanged()
+        .flatMapLatest { (type, query) ->
+            repository.getNotesByTypeAndQuery(type, query)
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // 全部未回收笔记（不按 type 过滤），供编辑页跨类型查找使用
     val allActiveNotes: StateFlow<List<Note>> = repository.getAllNotes()

@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 及以下的自动备份规则（fullBackupContent）。
+
+  重要：笔记数据存放在 Room 数据库（database 域的 notes_database.db）中，
+  必须包含 database 域，否则换机 / 重装后用户笔记会全部丢失。
+  这里同时排除 Room 的 WAL / SHM 临时文件，避免恢复出不一致的数据库快照。
+-->
 <full-backup-content>
+    <!-- 笔记正文：Room 数据库 -->
+    <include domain="database" path="notes_database.db"/>
+    <!-- 主题 / 背景等设置：DataStore Preferences -->
     <include domain="sharedpref" path="."/>
+    <include domain="file" path="datastore/"/>
+
+    <!-- 排除设备相关配置，避免跨设备恢复时产生冲突 -->
     <exclude domain="sharedpref" path="device.xml"/>
+    <!-- 排除 SQLite 临时文件，防止恢复到写入中断的中间状态 -->
+    <exclude domain="database" path="notes_database.db-wal"/>
+    <exclude domain="database" path="notes_database.db-shm"/>
+    <exclude domain="database" path="notes_database.db-journal"/>
 </full-backup-content>

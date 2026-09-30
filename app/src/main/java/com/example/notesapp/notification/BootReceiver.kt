@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.example.notesapp.data.NoteDatabase
+import com.example.notesapp.data.NoteRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,23 +30,23 @@ class BootReceiver : BroadcastReceiver() {
 
                 scope.launch {
                     try {
-                        val dao = NoteDatabase.getInstance(context).noteDao()
+                        val repository = NoteRepository(NoteDatabase.getInstance(context).noteDao())
                         val now = System.currentTimeMillis()
 
                         // 1) 重新调度未来的提醒
-                        val pendingNotes = dao.getNotesWithPendingReminders(now)
+                        val pendingNotes = repository.getNotesWithPendingReminders(now)
                         for (note in pendingNotes) {
                             NotificationScheduler.schedule(context, note)
                         }
 
                         // 2) 补发关机期间已过期但未触发的提醒，然后清零 reminderAt
-                        val missedNotes = dao.getNotesWithMissedReminders(now)
+                        val missedNotes = repository.getNotesWithMissedReminders(now)
                         NotificationHelper.createChannel(context)
                         for (note in missedNotes) {
                             val title = note.title.ifBlank { "笔记提醒" }
                             val preview = note.content.ifBlank { "点击查看详情" }
                             NotificationHelper.showReminder(context, note.id, title, preview)
-                            dao.clearReminder(note.id)
+                            repository.clearReminder(note.id)
                         }
                     } catch (e: Exception) {
                         if (e is kotlinx.coroutines.CancellationException) throw e

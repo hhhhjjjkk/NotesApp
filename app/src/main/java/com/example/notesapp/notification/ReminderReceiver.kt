@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.example.notesapp.data.NoteRepository
 import com.example.notesapp.data.NoteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,8 +33,8 @@ class ReminderReceiver : BroadcastReceiver() {
 
         scope.launch {
             try {
-                val dao = NoteDatabase.getInstance(context).noteDao()
-                val note = dao.getNoteById(noteId)
+                val repository = NoteRepository(NoteDatabase.getInstance(context).noteDao())
+                val note = repository.getNoteById(noteId)
                 // 已被移入回收站或已删除的笔记不提醒
                 if (note == null || note.isTrashed) return@launch
 
@@ -41,7 +42,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 val preview = note.content.ifBlank { "点击查看详情" }
                 NotificationHelper.showReminder(context, noteId, title, preview)
                 // 触发成功后清零 reminderAt，避免开机补发时重复通知
-                dao.clearReminder(note.id)
+                repository.clearReminder(note.id)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("ReminderReceiver", "触发提醒失败 noteId=$noteId", e)

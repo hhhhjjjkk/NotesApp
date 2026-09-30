@@ -13,8 +13,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
-import com.example.notesapp.data.NoteDatabase
-import com.example.notesapp.data.NoteRepository
 import com.example.notesapp.data.ThemeMode
 import com.example.notesapp.ui.navigation.NotesNavHost
 import com.example.notesapp.ui.theme.AppBackground
@@ -36,11 +34,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // 延迟创建数据库与仓库：使用 by lazy 避免主线程在 onCreate 阶段同步触发
-        // Room 的代理初始化和 SQLite 打开操作，将真正的 IO 推迟到 ViewModel 使用时。
+        // 复用 Application 中唯一的 Repository 实例：避免 Activity 自行 new 一个，
+        // 造成同一进程内存在多条数据访问路径。
+        // Repository 本身为 by lazy，真正的 SQLite 打开仍推迟到首次访问。
         val app = application as NotesApplication
         val dataStoreManager = app.dataStoreManager
-        val repository by lazy { NoteRepository(NoteDatabase.getInstance(app).noteDao()) }
+        val repository = app.repository
 
         val initialNoteId = noteIdFromIntent(intent)
         // 初始化成员字段：onNewIntent 时更新此 State 触发 Compose 重组

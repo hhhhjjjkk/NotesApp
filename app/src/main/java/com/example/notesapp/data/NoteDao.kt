@@ -19,6 +19,24 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE isTrashed = 0 AND (title LIKE '%' || :query || '%' OR content LIKE '%' || :query || '%') ORDER BY isPinned DESC, updatedAt DESC")
     fun searchNotes(query: String): Flow<List<Note>>
 
+    /**
+     * 首页列表查询：在 SQL 层同时完成「类型过滤 + 可选关键字搜索」，避免把全表读进内存再过滤。
+     *
+     * 用法约定：不需要搜索时传入空串 ""，此时 LIKE '%%' 恒为真，等价于只按类型过滤，
+     * 因此无需再用两个 Flow 做 combine。
+     * 注意 LIKE 对 ASCII 默认大小写不敏感；中文无大小写概念，行为与原先 [String.contains] 一致。
+     */
+    @Query(
+        """
+        SELECT * FROM notes
+        WHERE isTrashed = 0
+          AND type = :type
+          AND (title LIKE '%' || :query || '%' OR content LIKE '%' || :query || '%')
+        ORDER BY isPinned DESC, updatedAt DESC
+        """
+    )
+    fun getNotesByTypeAndQuery(type: Int, query: String): Flow<List<Note>>
+
     // 回收站：按移入时间倒序
     @Query("SELECT * FROM notes WHERE isTrashed = 1 ORDER BY trashedAt DESC")
     fun getTrashedNotes(): Flow<List<Note>>
