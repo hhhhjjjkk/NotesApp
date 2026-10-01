@@ -58,7 +58,9 @@ class DataStoreManager(private val context: Context) {
         (prefs[CARD_TRANSPARENCY] ?: 0f).coerceIn(0f, 1f)
     }
 
-    // 动画速度 0f~1f（0=最慢800ms；1=最快200ms；默认0.5=500ms）
+    // 动画速度 0f~1f，实际时长由 NotesNavHost.animDuration 换算：
+    // duration = (450 - speed * 300).coerceIn(150, 450)
+    // 即 0=最慢 450ms；1=最快 150ms；默认 0.5=300ms。
     val animSpeed: Flow<Float> = context.dataStore.data.map { prefs ->
         (prefs[ANIM_SPEED] ?: 0.5f).coerceIn(0f, 1f)
     }
