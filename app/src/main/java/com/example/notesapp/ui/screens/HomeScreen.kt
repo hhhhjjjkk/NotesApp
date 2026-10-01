@@ -2,6 +2,7 @@ package com.example.notesapp.ui.screens
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -54,6 +55,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -315,9 +317,25 @@ fun HomeScreen(
                 }
             }
 
-            // 底部滑块 + 添加按钮：直接锚定到内容 Box 底部，无外层包裹
+            // 底部滑块 + 添加按钮：直接锚定到内容 Box 底部，无外层包裹。
+            //
+            // 使用 MutableTransitionState(initialState = false) 而非直接传 visible：
+            // AnimatedVisibility 只在 visible 值"发生变化"时播放 enter 动画，初始值不触发。
+            // 而从编辑页返回首页时 HomeScreen 的 composition 会被重建，
+            // 若直接传 visible = !selectionMode，滑块会以 true 作为初始值直接出现，
+            // 导致"返回时上浮动画消失"。改为初始 false，挂载后立即推入 true，
+            // 使每次进入首页都能完整播放一次上浮动画。
+            //
+            // 用 SideEffect 而非 LaunchedEffect 同步 selectionMode：
+            // SideEffect 在每次成功重组后执行，既能响应多选模式切换（滑块下浮退出），
+            // 又能在首帧后立刻把初始 false 推成 true，从而触发入场动画。
+            val bottomBarVisible = remember { MutableTransitionState(false) }
+            SideEffect {
+                bottomBarVisible.targetState = !selectionMode
+            }
+
             AnimatedVisibility(
-                visible = !selectionMode,
+                visibleState = bottomBarVisible,
                 enter = slideInVertically(
                     animationSpec = tween(350),
                     initialOffsetY = { it }
