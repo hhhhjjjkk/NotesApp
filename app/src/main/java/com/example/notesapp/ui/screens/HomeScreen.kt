@@ -55,12 +55,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,7 +109,13 @@ fun HomeScreen(
     onNoteClick: (Long) -> Unit,
     onAddClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onTrashClick: () -> Unit
+    onTrashClick: () -> Unit,
+    /**
+     * 每次「重新回到首页」时该值应发生变化，用于重播底部滑块的上浮动画。
+     * 因为返回时 HomeScreen 的 composition 被保留（不重建），必须由外部显式告知，
+     * 否则动画不会重新播放。传入 back stack entry 的 id 即可满足。
+     */
+    replayKey: Any? = Unit
 ) {
     val context = LocalContext.current
     val notes by viewModel.notes.collectAsStateWithLifecycle()
@@ -319,18 +326,25 @@ fun HomeScreen(
 
             // 底部滑块 + 添加按钮：直接锚定到内容 Box 底部，无外层包裹。
             //
-            // 使用 MutableTransitionState(initialState = false) 而非直接传 visible：
-            // AnimatedVisibility 只在 visible 值"发生变化"时播放 enter 动画，初始值不触发。
-            // 而从编辑页返回首页时 HomeScreen 的 composition 会被重建，
-            // 若直接传 visible = !selectionMode，滑块会以 true 作为初始值直接出现，
-            // 导致"返回时上浮动画消失"。改为初始 false，挂载后立即推入 true，
-            // 使每次进入首页都能完整播放一次上浮动画。
+            // 背景：Compose Navigation 用 getVisibleEntries() 驱动 AnimatedContent，
+            // 且内容由 SaveableStateHolder/LocalOwnersProvider 承载，因此从二级页返回时
+            // HomeScreen 的 composition 是「被保留」的，remember 值不会重置，
+            // visible = !selectionMode 也自始至终没有变化 —— 所以 AnimatedVisibility
+            // 不会播放 enter 动画（它只响应变化，不响应初始值）。
             //
-            // 用 SideEffect 而非 LaunchedEffect 同步 selectionMode：
-            // SideEffect 在每次成功重组后执行，既能响应多选模式切换（滑块下浮退出），
-            // 又能在首帧后立刻把初始 false 推成 true，从而触发入场动画。
+            // 因此这里必须「主动重播」：以 replayKey 标记每一次重新回到首页，
+            // 当其变化时先把状态压回 false（无动画地回到起点），再推入 true，
+            // 人为制造一次真实的 false -> true 变化，从而触发上浮入场动画。
+            // 单一 effect 同时负责「回到首页重播」与「多选模式跟随」，
+            // 拆成两个 effect 会在首次组合时互相覆盖 targetState，产生竞态。
             val bottomBarVisible = remember { MutableTransitionState(false) }
-            SideEffect {
+            LaunchedEffect(replayKey, selectionMode) {
+                if (!selectionMode) {
+                    // 回到首页：先压回 false 并等一帧，确保 AnimatedVisibility 观察到该变化，
+                    // 否则同一帧内 false -> true 会被合并，动画不会播放。
+                    bottomBarVisible.targetState = false
+                    withFrameNanos { }
+                }
                 bottomBarVisible.targetState = !selectionMode
             }
 

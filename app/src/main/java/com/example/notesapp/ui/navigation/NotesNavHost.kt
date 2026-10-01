@@ -10,10 +10,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -104,10 +111,26 @@ fun NotesNavHost(
             exitTransition = homeExit,
             popEnterTransition = homePopEnter,
             popExitTransition = homePopExit
-        ) {
+        ) { homeEntry ->
+            // 每当首页重新回到 RESUMED（冷启动、或从编辑/设置/回收站返回）就自增，
+            // 作为 replayKey 通知 HomeScreen 重播底部滑块的上浮动画。
+            // 之所以不用 entry.id：它在同一次返回栈条目中恒定不变，无法反映"回来了"。
+            var homeResumeCount by remember(homeEntry) { mutableIntStateOf(0) }
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        homeResumeCount++
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
             HomeScreen(
                 viewModel = notesViewModel,
                 settingsViewModel = settingsViewModel,
+                replayKey = homeResumeCount,
                 onNoteClick = { noteId ->
                     navController.navigate(Screen.Editor.createRoute(noteId))
                 },
