@@ -3,7 +3,9 @@ package com.example.notesapp.ui.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -77,15 +79,15 @@ sealed interface NoteImageState {
 /**
  * 图文混排编辑器：文字块与图片块按顺序纵向排列。
  *
+ * 插入交互（刻意不设块间按钮行）：
+ * - 文字：点击任意图片块，就会紧随其后插入一个文字块并聚焦，直接继续输入；
+ * - 图片：由编辑页底部工具栏的插图按钮负责，插入后自动补一个文字块并聚焦。
+ * 这样图片下方永远可以直接写字，不需要先去点某个小按钮。
+ *
  * 图片块右下角有拖拽手柄，按住拖动即可缩放；因为始终按 [DocumentBlock.Image.aspectRatio]
  * 保持原始宽高比，所以拖拽只改变宽度，高度随之等比变化，不会把图拉变形。
  *
- * 每个块之间的分隔条提供两个入口：插入文字段落、插入图片。
- * 两者都必须有，否则结构只能是「一段文字 + 若干图片」，
- * 图片下方无法再写字，图文混排就名不副实。
- *
- * @param onInsertImage 请求在指定下标插入图片，真正的选图由调用方发起
- * @param onInsertText 请求在指定下标插入空文字块（由调用方负责生成 id 并聚焦）
+ * @param onAddTextAfterImage 在指定图片块之后插入文字块（由调用方负责生成 id 并聚焦）
  * @param focusBlockId 需要自动聚焦的文字块 id
  */
 @Composable
@@ -93,8 +95,8 @@ fun RichDocumentEditor(
     blocks: List<DocumentBlock>,
     onBlocksChange: (List<DocumentBlock>) -> Unit,
     imageStore: NoteImageStore,
-    onInsertImage: (index: Int) -> Unit,
-    onInsertText: (index: Int) -> Unit,
+    onAddTextAfterImage: (imageId: String) -> Unit,
+    onInsertImageBefore: (imageId: String) -> Unit,
     modifier: Modifier = Modifier,
     textColor: Color,
     cursorColor: Color,
@@ -179,6 +181,9 @@ fun RichDocumentEditor(
                                 availableWidthPx = availableWidthPx,
                                 accentColor = accentColor,
                                 textColor = textColor,
+                                // 点图片本身：在其后插入文字块并聚焦，直接继续写字
+                                onClick = { onAddTextAfterImage(block.id) },
+                                onLongPress = { onInsertImageBefore(block.id) },
                                 onWidthFractionChange = { newFraction ->
                                     // 按 id 匹配（而非下标），并在 EditableImageBlock 内部用
                                     // rememberUpdatedState 读取本回调的最新版本；
@@ -199,13 +204,6 @@ fun RichDocumentEditor(
                             )
                         }
                     }
-
-                    // 块与块之间（以及末尾）提供「插入文字 / 插入图片」入口
-                    InsertGap(
-                        onInsertText = { onInsertText(index + 1) },
-                        onInsertImage = { onInsertImage(index + 1) },
-                        accentColor = accentColor
-                    )
                 }
             }
         }
@@ -213,72 +211,18 @@ fun RichDocumentEditor(
 }
 
 /**
- * 块之间的插入入口。做成细分隔线嵌两个图标的形式，
- * 保持低调但仍可发现——否则用户不知道能把内容插到两段之间。
- */
-@Composable
-private fun InsertGap(
-    onInsertText: () -> Unit,
-    onInsertImage: () -> Unit,
-    accentColor: Color
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(accentColor.copy(alpha = 0.10f))
-        )
-        // 触摸热区必须够大：这是「在图片下方插入文字段落」的唯一入口，
-        // 若只有图标本身大小（18dp ≈ 2.9mm）则很难点中，等于该功能不可用。
-        // 图标仍是 18dp，但可点区域放大到 44dp。
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clickable(onClick = onInsertText),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Notes,
-                contentDescription = stringResource(R.string.insert_text_here),
-                tint = accentColor.copy(alpha = 0.45f),
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clickable(onClick = onInsertImage),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.AddPhotoAlternate,
-                contentDescription = stringResource(R.string.insert_image_here),
-                tint = accentColor.copy(alpha = 0.45f),
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(accentColor.copy(alpha = 0.10f))
-        )
-    }
-}
-
-/**
  * 可拖拽缩放的图片块。
+ *
+ * 交互：
+ * - 点击图片主体：在其后插入文字块并聚焦（图片下方直接继续写字，无需额外按钮）
+ * - 右上角 × ：删除该图片
+ * - 右下角手柄拖拽：缩放（1:1 跟随横向位移）
  *
  * 拖拽逻辑：只取右下角手柄的横向位移，与宽度变化 1:1 对应。
  * 因为显示时锁定原图宽高比，宽度是唯一自由度，横向位移直接就是宽度变化，
  * 图片边缘会精确跟随手指；纵向位移会被外层纵向滚动接管，也不参与计算。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EditableImageBlock(
     block: DocumentBlock.Image,
@@ -286,6 +230,8 @@ private fun EditableImageBlock(
     availableWidthPx: Float,
     accentColor: Color,
     textColor: Color,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
     onWidthFractionChange: (Float) -> Unit,
     onRemove: () -> Unit
 ) {
@@ -310,7 +256,13 @@ private fun EditableImageBlock(
             .width(widthDp)
             .aspectRatio(block.aspectRatio)
             .clip(RoundedCornerShape(12.dp))
-            .background(accentColor.copy(alpha = 0.06f)),
+            .background(accentColor.copy(alpha = 0.06f))
+            // 点击图片主体 = 在其后插入文字块；长按 = 在其前插入图片。
+            // 手柄和删除按钮在图片之上，各自消费自己的事件，不会触发这里的 clickable。
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            ),
         contentAlignment = Alignment.Center
     ) {
         when (val state = imageState) {

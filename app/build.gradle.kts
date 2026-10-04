@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.notesapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "3.4"
+        versionCode = 26
+        versionName = "3.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -76,7 +76,6 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
 
     // Haze：真实背景模糊，用于毛玻璃（frosted glass）效果
-    implementation(libs.androidx.haze)
 
     // Testing
     testImplementation(libs.junit)

@@ -3,7 +3,6 @@ package com.example.notesapp.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -34,7 +33,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -47,26 +45,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.data.NoteType
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * 液态玻璃分段滑块（备忘录 / 待办切换）。
+ * 分段滑块（备忘录 / 待办切换），扁平化设计。
  *
- * 玻璃质感实现要点（避免"塑料感"）：
- * - 轨道（track）做凹陷：顶部内阴影 + 底部内高光 + 边缘亮线，形成下凹的玻璃容纳槽
- * - 滑块（thumb）做凸起：顶部镜面高光 + 内部折射光斑 + 底部反射高光 + 边缘亮线 + 软投影
- * - 所有层都用 drawRoundRect 自身裁剪到胶囊形，配合独立的 border 描边，避免 clip 把描边裁掉一半
- * - 半透明叠加让背景透出，形成玻璃折射观感；不用自身 blur，保证镜面高光锐利
- * - 拖动跟手 snapTo，松手 spring 物理回弹
+ * 实现要点：
+ * - 轨道：实色填充 + 主题色染色带，无内阴影 / 内高光 / 描边
+ * - 滑块：实色填充 + 主题色染色，无渐变 / 高光 / 光斑 / 描边，仅保留很轻的投影区分层级
+ * - 所有层都用 drawRoundRect 自身裁剪到胶囊形，避免 clip 把边缘裁掉一半
+ * - 拖动跟手 snapTo，松手 animateTo 到位（无弹簧回弹，交互更克制）
  *
  * @param selected 当前选中类型，[NoteType.NOTE] 或 [NoteType.TODO]
  * @param onSelected 类型切换回调
- */
-@Composable
+ */@Composable
 fun LiquidSegmentedSlider(
     selected: Int,
     onSelected: (Int) -> Unit,
@@ -74,7 +67,7 @@ fun LiquidSegmentedSlider(
     rightLabel: String,
     isDark: Boolean,
     modifier: Modifier = Modifier,
-    hazeState: HazeState? = null
+
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -105,59 +98,19 @@ fun LiquidSegmentedSlider(
     val primary = MaterialTheme.colorScheme.primary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
-    // 轨道（凹陷玻璃槽）配色
-    val trackBase = if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
-    val trackTopShadow = if (isDark) Color.Black.copy(alpha = 0.32f) else Color.Black.copy(alpha = 0.12f)
-    val trackBottomLight = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.30f)
-    val trackEdge = if (isDark) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.60f)
-    val trackTint = primary.copy(alpha = if (isDark) 0.16f else 0.12f)
-
-    // 毛玻璃轨道样式：Haze 真实背景模糊 + 半透明磨砂染色
-    val trackHazeStyle = HazeStyle(
-        tint = if (isDark) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.55f),
-        blurRadius = 24.dp,
-        noiseFactor = 0.12f
-    )
+    // 轨道配色（扁平化）：实色填充，无内阴影 / 内高光 / 描边
+    val trackSurface = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+    val trackTint = primary.copy(alpha = if (isDark) 0.22f else 0.14f)
 
     BoxWithConstraints(
         modifier = modifier
             .height(44.dp)
-            // 毛玻璃模式：轨道注册为 hazeChild，由背景端 Haze 模糊透出下方内容
-            .then(if (hazeState != null) Modifier.hazeChild(hazeState, CircleShape, trackHazeStyle) else Modifier)
-            .shadow(
-                elevation = 2.dp,
-                shape = CircleShape,
-                ambientColor = Color.Black.copy(alpha = 0.05f),
-                spotColor = Color.Black.copy(alpha = 0.08f)
-            )
             .drawBehind {
                 val h = size.height
                 val corner = CornerRadius(h / 2f)
 
-                // 基础底色：半透明白，让背景透出（毛玻璃模式下跳过，底色由 Haze 模糊 + tint 提供）
-                if (hazeState == null) {
-                    drawRoundRect(trackBase, cornerRadius = corner)
-                }
-
-                // 顶部内阴影：凹陷感
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(trackTopShadow, Color.Transparent),
-                        startY = 0f,
-                        endY = h * 0.28f
-                    ),
-                    cornerRadius = corner
-                )
-
-                // 底部内高光：玻璃槽反光
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, trackBottomLight),
-                        startY = h * 0.55f,
-                        endY = h
-                    ),
-                    cornerRadius = corner
-                )
+                // 实色轨道
+                drawRoundRect(trackSurface, cornerRadius = corner)
 
                 // 实时跟随滑块的主题色染色带：只有滑块覆盖到的地方变色，
                 // 随 animOffset 实时移动（拖动 snapTo / 释放 animateTo 均逐帧刷新），无延迟。
@@ -172,9 +125,7 @@ fun LiquidSegmentedSlider(
                     )
                 }
             }
-            // 轨道边缘亮线：玻璃槽的边沿高光，画在玻璃层之上
-            .border(width = 1.dp, color = trackEdge, shape = CircleShape)
-            // 最后裁剪子内容，防止文字/滑块溢出胶囊边界
+            // 裁剪子内容，防止文字/滑块溢出胶囊边界
             .clip(CircleShape)
             .onSizeChanged { widthPx = it.width.toFloat() }
             .pointerInput(Unit) {
@@ -229,19 +180,13 @@ fun LiquidSegmentedSlider(
         val thumbWidthDp = (maxWidth - padDp * 2) / 2
         val thumbWidthPx = with(density) { thumbWidthDp.toPx() }
 
-        // 滑块（凸起玻璃）配色：在原基础上叠加主题色，让"覆盖处"呈现明显变色
-        val thumbTop = if (isDark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.78f)
-        val thumbBottom = if (isDark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.36f)
-        val thumbSpecular = if (isDark) Color.White.copy(alpha = 0.62f) else Color.White.copy(alpha = 0.95f)
-        val thumbShade = if (isDark) Color.Black.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.10f)
-        val thumbBottomReflect = if (isDark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.40f)
-        val thumbEdge = if (isDark) Color.White.copy(alpha = 0.34f) else Color.White.copy(alpha = 0.90f)
-        val thumbGlow = if (isDark) Color.White.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.85f)
-        // 滑块覆盖区域的主题色染色，与轨道色带同色，强化"覆盖即变色"
-        val thumbTint = primary.copy(alpha = if (isDark) 0.16f else 0.13f)
+        // 滑块配色（扁平化）：实色填充 + 主题色，无渐变、无高光、无光斑、无描边
+        val thumbSurface = MaterialTheme.colorScheme.surface
+        val thumbTint = primary.copy(alpha = if (isDark) 0.28f else 0.18f)
+        val thumbElevation = if (isDark) Color.Black.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.10f)
 
-        // 滑块：液态玻璃材质，随手指实时位移。
-        // 用清晰的镜面高光 + 内部折射光斑 + 边缘亮线模拟玻璃，不使用自身模糊以保持高光锐利。
+        // 滑块：扁平材质，随手指实时位移。
+        // 实色填充 + 主题色，无渐变 / 高光 / 光斑 / 描边；仅保留很轻的投影区分层级。
         // offset 用 lambda 延迟读取 animOffset.value，避免动画每帧触发组合阶段重组。
         Box(
             modifier = Modifier
@@ -254,77 +199,28 @@ fun LiquidSegmentedSlider(
                 }
                 .width(thumbWidthDp)
                 .fillMaxHeight()
-                // 液态拉伸：拖动时横向拉长、纵向轻微压缩，锚点随移动方向变化
+                // 拖动时轻微拉伸，松手即恢复（无弹簧回弹，配合扁平化更克制）
                 .graphicsLayer {
                     scaleX = stretch.value
                     scaleY = 1f - (stretch.value - 1f) * 0.5f
                     transformOrigin = TransformOrigin(stretchPivot, 0.5f)
                 }
                 .shadow(
-                    elevation = 6.dp,
+                    elevation = 2.dp,
                     shape = CircleShape,
-                    ambientColor = Color.Black.copy(alpha = 0.12f),
-                    spotColor = Color.Black.copy(alpha = 0.24f)
+                    ambientColor = thumbElevation,
+                    spotColor = thumbElevation
                 )
                 .drawBehind {
                     val h = size.height
                     val corner = CornerRadius(h / 2f)
 
-                    // 基础渐变：上亮下暗，模拟玻璃受光
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(thumbTop, thumbBottom),
-                            startY = 0f,
-                            endY = h
-                        ),
-                        cornerRadius = corner
-                    )
+                    // 实色底
+                    drawRoundRect(thumbSurface, cornerRadius = corner)
 
                     // 主题色染色层：覆盖区域明显变色
                     drawRoundRect(thumbTint, cornerRadius = corner)
-
-                    // 底部柔阴影：体积感
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, thumbShade),
-                            startY = h * 0.60f,
-                            endY = h
-                        ),
-                        cornerRadius = corner
-                    )
-
-                    // 内部折射光斑：模拟液态玻璃对光的折射聚光
-                    drawRoundRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(thumbGlow, thumbGlow.copy(alpha = 0f)),
-                            center = Offset(size.width * 0.32f, size.height * 0.18f),
-                            radius = size.width * 0.75f
-                        ),
-                        cornerRadius = corner
-                    )
-
-                    // 顶部窄高光：镜面反射
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(thumbSpecular, Color.Transparent),
-                            startY = 0f,
-                            endY = h * 0.45f
-                        ),
-                        cornerRadius = corner
-                    )
-
-                    // 底部反射高光：玻璃下沿的折射亮线
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, thumbBottomReflect),
-                            startY = h * 0.55f,
-                            endY = h
-                        ),
-                        cornerRadius = corner
-                    )
                 }
-                // 边缘亮线：玻璃块边沿，画在玻璃层之上，形成清晰的玻璃轮廓
-                .border(width = 1.dp, color = thumbEdge, shape = CircleShape)
         )
 
         // 左右文字：颜色随滑块实时插值（lerp），不再等 selected 切换后才变色——彻底消除"颜色延迟跟随"

@@ -172,8 +172,8 @@ fun NoteCard(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                // 液态玻璃质感：顶部高光渐变模拟玻璃受光，borderWidth=0 不画边框避免"框"感
-                .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 0.dp),
+                // 扁平化表面：无高光渐变与描边，层次由背景色与阴影表达
+                .liquidGlassSurface(shape = shape, isDark = isDark),
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = shape,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),

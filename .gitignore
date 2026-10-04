@@ -14,3 +14,6 @@
 # 下载页面和服务器脚本（非应用源码）
 /download.html
 /serve.py
+
+# Kotlin 构建会话数据
+/.kotlin/

@@ -19,7 +19,7 @@
 | 视觉特效 | Haze 0.7.3（真实背景模糊） |
 | 构建工具 | Gradle 8.7 + AGP 8.5.0（KSP 2.0.0-1.0.22） |
 | 最低 / 目标 SDK | minSdk 26 / targetSdk 35 |
-| 当前版本 | versionCode 25，versionName 3.4 |
+| 当前版本 | versionCode 26，versionName 3.4.1 |
 
 ## 功能特性
 
@@ -109,7 +109,7 @@ APK 下载见本仓库 [Releases](https://github.com/hhhhjjjkk/NotesApp/releases
 
 最新版本：
 ```
-https://github.com/hhhhjjjkk/NotesApp/releases/download/v3.4/notesapp-v3.4-debug.apk
+https://github.com/hhhhjjjkk/NotesApp/releases/download/v3.4.1/notesapp-v3.4.1-debug.apk
 ```
 
 > 均为 **debug 签名包**，可直接安装；若与已装版本签名冲突，请先卸载旧版。
@@ -137,6 +137,16 @@ https://github.com/hhhhjjjkk/NotesApp/releases/download/v3.4/notesapp-v3.4-debug
 >
 > 验证方式：直接执行 `$ANDROID_HOME/build-tools/34.0.0/aapt2 version`，
 > 能打印 `Android Asset Packaging Tool (aapt) 2.x` 即说明模拟器已就绪。
+>
+> **项目路径含中文时会遇到第二类问题**：Kotlin 守护进程可能以非 UTF-8 编码启动，
+> 导致报 `error: source file or directory not found: /root/u5907.../xxx.kt`
+> （中文「备忘录」被写成 unicode 转义字面量）。`-Dfile.encoding` 只影响 Gradle 自身 JVM，
+> 传不进 Kotlin 守护进程。最简单的绕过方式是从纯 ASCII 路径构建：
+> ```bash
+> sudo ln -sfn /root/备忘录/NotesApp /root/notesapp-build
+> cd /root/notesapp-build && ./gradlew assembleDebug
+> ```
+> 注：`kotlin.compiler.execution.strategy=in-process` **不能**解决此问题（KSP 仍按损坏路径解析源文件）。
 
 ### 运行测试
 
@@ -145,6 +155,20 @@ https://github.com/hhhhjjjkk/NotesApp/releases/download/v3.4/notesapp-v3.4-debug
 ```
 
 ## 更新日志
+
+### v3.4.1 (versionCode 26)
+
+交互简化 + 界面扁平化：
+
+- **插入交互简化**：去掉了块间的小按钮行。现在**点击图片即在图片下方插入文字块并聚焦**，直接继续写字；
+  底部工具栏的「插入图片」在插入图片后也会自动补一个文字块并聚焦，全程无需寻找任何插入按钮。
+- **全面扁平化**：移除液态玻璃材质——顶部高光渐变、边缘亮线描边、内部折射光斑、噪点与真实模糊全部移除。
+  卡片、搜索栏、底部切换器、编辑页颜色条、回收站卡片改为纯色表面 + 圆角 + 轻投影，层次交给色板表达。
+- 底部「备忘录/待办」切换器移除 Haze 背景模糊依赖，改为实色轨道 + 主题色染色带，拖动跟手逻辑不变。
+- FAB 由径向渐变改为主题色实色，阴影减弱。
+- 按压反馈保留轻微缩放，移除弹簧回弹。
+
+> ⚠️ **观感未实测**：本环境无模拟器 / 真机，扁平化后的视觉效果未经运行时验证。交互逻辑的改动（点击图片插入文字、插图后自动聚焦）同样只经过编译与单元测试验证。
 
 ### v3.4 (versionCode 25)
 

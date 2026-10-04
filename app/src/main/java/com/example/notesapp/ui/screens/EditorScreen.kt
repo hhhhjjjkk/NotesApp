@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -137,6 +138,8 @@ fun EditorScreen(
     // 用 rememberSaveable：系统选图器可能触发 Activity 重建（转屏、内存回收），
     // 下标若丢失会导致选完图后无处可插。
     var pendingInsertIndex by rememberSaveable { mutableStateOf(-1) }
+    // 选图返回后是否在其后补一个文字块：工具栏插入 = 补；长按在图片前插入 = 不补
+    var pendingFollowWithText by remember { mutableStateOf(true) }
 
     // 需要自动聚焦的文字块 id：新插入的文字段落要能立刻打字
     var focusBlockId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -145,7 +148,9 @@ fun EditorScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         val insertAt = pendingInsertIndex
+        val followWithText = pendingFollowWithText
         pendingInsertIndex = -1
+        pendingFollowWithText = true
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             val imageBlock = imageStore.importImage(uri)
@@ -160,25 +165,54 @@ fun EditorScreen(
             // 下标失效（-1，或期间文档被改动）时退化为追加到末尾，
             // 而不是默默丢弃用户刚选好的图片
             val target = if (insertAt in 0..blocks.size) insertAt else blocks.size
-            blocks = blocks.toMutableList().also { it.add(target, imageBlock) }
+            val updated = blocks.toMutableList().also { it.add(target, imageBlock) }
+            if (followWithText) {
+                // 图片后面补一个空文字块并聚焦：插完图可以直接继续写字，
+                // 不需要再去找任何「插入文字」按钮。
+                // 长按在图片「前」插图时不补（前方通常已有文字，插入块反而多余）。
+                val textBlock = DocumentBlock.text("")
+                updated.add(target + 1, textBlock)
+                blocks = updated
+                focusBlockId = textBlock.id
+            } else {
+                blocks = updated
+            }
         }
     }
 
-    fun requestInsertImage(index: Int) {
+    // 选图返回后是否在其后补一个文字块：工具栏插入 = 补；长按在图片前插入 = 不补
+
+    fun requestInsertImage(index: Int, followWithText: Boolean = true) {
         pendingInsertIndex = index
+        pendingFollowWithText = followWithText
         pickImageLauncher.launch(arrayOf("image/*"))
+    }
+
+    /** 长按图片块：在它前面插入一张图片（两张图片之间也能插图）。 */
+    fun insertImageBefore(imageId: String) {
+        val index = blocks.indexOfFirst { it.id == imageId }
+        if (index < 0) return
+        requestInsertImage(index, followWithText = false)
     }
 
     /**
      * 在指定位置插入一个空文字块并聚焦。
-     * 没有这个入口，结构只能是「一段文字 + 若干图片」，
-     * 图片下方再也写不了字，图文混排就不成立。
      */
     fun insertTextAt(index: Int) {
         val newBlock = DocumentBlock.text("")
         val target = index.coerceIn(0, blocks.size)
         blocks = blocks.toMutableList().also { it.add(target, newBlock) }
         focusBlockId = newBlock.id
+    }
+
+    /**
+     * 点击图片块后，在其后插入一个空文字块并聚焦。
+     * 这是「图片下方直接写字」的主入口，用户不需要去找任何按钮。
+     */
+    fun insertTextAfterImage(imageId: String) {
+        val index = blocks.indexOfFirst { it.id == imageId }
+        if (index < 0) return
+        insertTextAt(index + 1)
     }
 
     // 退出标志：返回触发后停止自动保存，避免与 saveAndExit 竞态导致重复保存
@@ -365,7 +399,7 @@ fun EditorScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        // 依据当前配色判断明暗，供液态玻璃材质使用（兼容强制主题）
+        // 依据当前配色判断明暗，供扁平表面使用（兼容强制主题）
         val bgColor = MaterialTheme.colorScheme.background
         val isDark =
             (0.299f * bgColor.red + 0.587f * bgColor.green + 0.114f * bgColor.blue) < 0.5f
@@ -444,8 +478,8 @@ fun EditorScreen(
                     blocks = blocks,
                     onBlocksChange = { blocks = it },
                     imageStore = imageStore,
-                    onInsertImage = { index -> requestInsertImage(index) },
-                    onInsertText = { index -> insertTextAt(index) },
+                    onAddTextAfterImage = { imageId -> insertTextAfterImage(imageId) },
+                    onInsertImageBefore = { imageId -> insertImageBefore(imageId) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
@@ -470,10 +504,10 @@ fun EditorScreen(
                     .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 10.dp)
                     .shadow(
-                        elevation = 10.dp,
+                        elevation = 4.dp,
                         shape = RoundedCornerShape(28.dp),
-                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                        ambientColor = Color.Black.copy(alpha = 0.08f),
+                        spotColor = Color.Black.copy(alpha = 0.16f)
                     )
                     .background(
                         MaterialTheme.colorScheme.surface,
@@ -481,8 +515,7 @@ fun EditorScreen(
                     )
                     .liquidGlassSurface(
                         shape = RoundedCornerShape(28.dp),
-                        isDark = isDark,
-                        borderWidth = 1.dp
+                        isDark = isDark
                     )
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
@@ -496,7 +529,8 @@ fun EditorScreen(
                         onColorSelected = { selectedColor = it.toArgb() },
                         modifier = Modifier.weight(1f)
                     )
-                    // 在正文末尾插入图片；也可点击正文中块与块之间的入口插入到指定位置
+                    // 在文档末尾插入图片（插入后自动补一个文字块，可直接继续写字）；
+                    // 想插到文档中部：长按目标位置的图片，在它前面插入
                     IconButton(onClick = { requestInsertImage(blocks.size) }) {
                         Icon(
                             imageVector = Icons.Default.AddPhotoAlternate,

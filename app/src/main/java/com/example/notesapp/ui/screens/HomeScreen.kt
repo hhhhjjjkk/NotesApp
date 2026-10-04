@@ -67,7 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -78,8 +78,6 @@ import com.example.notesapp.R
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.ThemeMode
 import com.example.notesapp.ui.components.EmptyState
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
 import com.example.notesapp.ui.components.LiquidSegmentedSlider
 import com.example.notesapp.ui.components.NoteCard
 import com.example.notesapp.ui.components.SearchBar
@@ -138,8 +136,6 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 毛玻璃模糊状态：背景（笔记列表）与前景（切换器）共享，实现真实背景模糊
-    val hazeState = remember { HazeState() }
 
     // 长按选中的笔记，用于底部弹窗
     var sheetNote by remember { mutableStateOf<Note?>(null) }
@@ -260,7 +256,6 @@ fun HomeScreen(
                     columns = StaggeredGridCells.Adaptive(160.dp),
                     modifier = Modifier
                         .fillMaxSize()
-                        .haze(hazeState)
                         .padding(top = SearchBarHeight + 12.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -374,33 +369,22 @@ fun HomeScreen(
                         leftLabel = stringResource(R.string.tab_note),
                         rightLabel = stringResource(R.string.tab_todo),
                         isDark = isDark,
-                        hazeState = hazeState,
                         modifier = Modifier.weight(1f)
                     )
-                    val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.88f)
+                    val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.92f)
                     val primary = MaterialTheme.colorScheme.primary
-                    // 缓存 Brush，避免每次重组都新建
-                    val fabBrush = remember(primary) {
-                        Brush.radialGradient(
-                            colors = listOf(
-                                primary.copy(alpha = 0.92f),
-                                primary.copy(alpha = 0.62f)
-                            )
-                        )
-                    }
                     Box(
                         modifier = Modifier
                             .size(52.dp)
                             .then(scaleMod)
-                            .shadow(8.dp, CircleShape)
+                            .shadow(4.dp, CircleShape)
                             .background(
-                                brush = fabBrush,
+                                color = primary,
                                 shape = CircleShape
                             )
                             .liquidGlassSurface(
                                 shape = CircleShape,
-                                isDark = isDark,
-                                borderWidth = 1.5.dp
+                                isDark = isDark
                             )
                             .clickable(
                                 interactionSource = fabSrc,
@@ -437,10 +421,10 @@ fun HomeScreen(
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 16.dp)
                         .shadow(
-                            elevation = 12.dp,
+                            elevation = 4.dp,
                             shape = RoundedCornerShape(28.dp),
-                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+                            ambientColor = Color.Black.copy(alpha = 0.08f),
+                            spotColor = Color.Black.copy(alpha = 0.16f)
                         )
                         .background(
                             MaterialTheme.colorScheme.surface,
@@ -448,8 +432,7 @@ fun HomeScreen(
                         )
                         .liquidGlassSurface(
                             shape = RoundedCornerShape(28.dp),
-                            isDark = isDark,
-                            borderWidth = 1.dp
+                            isDark = isDark
                         )
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                         .animateContentSize(animationSpec = tween(250)),
