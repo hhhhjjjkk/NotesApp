@@ -16,6 +16,8 @@
         <!-- 主题 / 背景等设置：DataStore Preferences -->
         <include domain="sharedpref" path="."/>
         <include domain="file" path="datastore/"/>
+        <!-- 笔记内图片：不包含则换机后图文笔记只剩文字、图片全部裂掉 -->
+        <include domain="file" path="note_images/"/>
 
         <exclude domain="sharedpref" path="device.xml"/>
         <exclude domain="database" path="notes_database.db-wal"/>
@@ -27,6 +29,8 @@
         <include domain="database" path="notes_database.db"/>
         <include domain="sharedpref" path="."/>
         <include domain="file" path="datastore/"/>
+        <!-- 换机直传同样要带上图片 -->
+        <include domain="file" path="note_images/"/>
 
         <exclude domain="sharedpref" path="device.xml"/>
         <exclude domain="database" path="notes_database.db-wal"/>

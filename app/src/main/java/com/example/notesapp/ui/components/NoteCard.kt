@@ -2,6 +2,7 @@ package com.example.notesapp.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -38,14 +40,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import com.example.notesapp.NotesApplication
+import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.NoteType
+import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.ui.theme.MarkdownBlock
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.parseMarkdown
@@ -72,6 +80,18 @@ fun NoteCard(
     transparency: Float = 0f,
     onComplete: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    // 安全转换：预览/测试场景下 applicationContext 可能不是 NotesApplication
+    val imageStore = remember(context) {
+        (context.applicationContext as? NotesApplication)?.imageStore
+    }
+    // 含图片的笔记：卡片上只显示第一张缩略图，避免列表项被撑得过高
+    val firstImage = remember(note.richContent, note.content) {
+        RichDocumentCodec.decode(note.richContent, note.content)
+            .filterIsInstance<DocumentBlock.Image>()
+            .firstOrNull()
+    }
+
     val baseColor = note.color.toNoteColor(isDark)
     // 透明度开关：transparency=0 完全不透明；>0 时降低 alpha，让背景图透过来
     // 限制最大透明度 0.85，避免卡片内容不可读
@@ -179,6 +199,17 @@ fun NoteCard(
                             textColor = contentColor.copy(alpha = 0.85f),
                             modifier = Modifier.padding(top = if (note.title.isNotBlank()) 6.dp else 0.dp),
                             maxLines = 6
+                        )
+                    }
+                    if (firstImage != null && imageStore != null) {
+                        NoteImageThumbnail(
+                            imageStore = imageStore,
+                            image = firstImage,
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(RoundedCornerShape(10.dp))
                         )
                     }
                     Text(

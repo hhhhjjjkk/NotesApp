@@ -19,4 +19,5 @@
     <exclude domain="database" path="notes_database.db-wal"/>
     <exclude domain="database" path="notes_database.db-shm"/>
     <exclude domain="database" path="notes_database.db-journal"/>
+    <include domain="file" path="note_images/"/>
 </full-backup-content>

@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AlarmOn
 import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Delete
@@ -49,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -69,12 +71,19 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.notesapp.R
+import com.example.notesapp.NotesApplication
+import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.Note
+import com.example.notesapp.data.RichDocumentCodec
+import com.example.notesapp.storage.NoteImageStore
 import com.example.notesapp.ui.components.ColorPicker
+import com.example.notesapp.ui.components.RichDocumentEditor
+import com.example.notesapp.ui.components.RichDocumentSaver
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.noteCardColors
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -101,7 +110,13 @@ fun EditorScreen(
     }
 
     var title by rememberSaveable { mutableStateOf("") }
-    var content by rememberSaveable { mutableStateOf("") }
+    // 图文混排文档：文字块与图片块按顺序排列。
+    // 用 RichDocumentSaver 序列化保存，旋转屏幕后图片位置与尺寸不会丢。
+    var blocks by rememberSaveable(stateSaver = RichDocumentSaver) {
+        mutableStateOf(listOf<DocumentBlock>(DocumentBlock.text("")))
+    }
+    // 纯文本版本（搜索 / 分享 / 首页预览用），由块列表派生，始终与图文内容一致
+    val content = remember(blocks) { RichDocumentCodec.plainText(blocks) }
     var selectedColor by rememberSaveable { mutableStateOf(0) }
     var isPinned by rememberSaveable { mutableStateOf(false) }
     var noteLoaded by rememberSaveable { mutableStateOf(false) }
@@ -113,6 +128,58 @@ fun EditorScreen(
     var pickedMonth by rememberSaveable { mutableStateOf(0) }
     var pickedDay by rememberSaveable { mutableStateOf(0) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val imageStore = remember(context) {
+        (context.applicationContext as NotesApplication).imageStore
+    }
+
+    // 插入位置：点击「在此处插入图片」时记录目标下标，选图返回后按该下标插入。
+    // 用 rememberSaveable：系统选图器可能触发 Activity 重建（转屏、内存回收），
+    // 下标若丢失会导致选完图后无处可插。
+    var pendingInsertIndex by rememberSaveable { mutableStateOf(-1) }
+
+    // 需要自动聚焦的文字块 id：新插入的文字段落要能立刻打字
+    var focusBlockId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        val insertAt = pendingInsertIndex
+        pendingInsertIndex = -1
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val imageBlock = imageStore.importImage(uri)
+            if (imageBlock == null) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.image_import_failed),
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+            // 下标失效（-1，或期间文档被改动）时退化为追加到末尾，
+            // 而不是默默丢弃用户刚选好的图片
+            val target = if (insertAt in 0..blocks.size) insertAt else blocks.size
+            blocks = blocks.toMutableList().also { it.add(target, imageBlock) }
+        }
+    }
+
+    fun requestInsertImage(index: Int) {
+        pendingInsertIndex = index
+        pickImageLauncher.launch(arrayOf("image/*"))
+    }
+
+    /**
+     * 在指定位置插入一个空文字块并聚焦。
+     * 没有这个入口，结构只能是「一段文字 + 若干图片」，
+     * 图片下方再也写不了字，图文混排就不成立。
+     */
+    fun insertTextAt(index: Int) {
+        val newBlock = DocumentBlock.text("")
+        val target = index.coerceIn(0, blocks.size)
+        blocks = blocks.toMutableList().also { it.add(target, newBlock) }
+        focusBlockId = newBlock.id
+    }
 
     // 退出标志：返回触发后停止自动保存，避免与 saveAndExit 竞态导致重复保存
     var isExiting by rememberSaveable { mutableStateOf(false) }
@@ -176,7 +243,8 @@ fun EditorScreen(
         if (!noteLoaded && existingNote != null) {
             existingNote.let {
                 title = it.title
-                content = it.content
+                // 旧笔记 richContent 为空，会退回为「单段纯文本」，因此历史内容不丢
+                blocks = RichDocumentCodec.decode(it.richContent, it.content)
                 selectedColor = it.color
                 isPinned = it.isPinned
                 reminderAt = it.reminderAt
@@ -186,11 +254,10 @@ fun EditorScreen(
     }
 
     val focusRequester = remember { FocusRequester() }
-    // 新建笔记时自动聚焦内容输入框；用 try-catch 兜住未布局完成的情况
+    // 新建笔记时自动聚焦正文（交给编辑器按 focusBlockId 挂载并聚焦）
     LaunchedEffect(Unit) {
         if (noteId == 0L) {
-            delay(80)
-            runCatching { focusRequester.requestFocus() }
+            focusBlockId = blocks.firstOrNull()?.id
         }
     }
 
@@ -201,6 +268,7 @@ fun EditorScreen(
         return base.copy(
             title = title.trim(),
             content = content,
+            richContent = RichDocumentCodec.encode(blocks),
             color = selectedColor,
             isPinned = isPinned,
             type = base.type,
@@ -209,11 +277,16 @@ fun EditorScreen(
         )
     }
 
+    /** 笔记是否有内容：纯文本非空，或至少含一张图片。 */
+    fun hasContent(note: Note): Boolean =
+        note.title.isNotBlank() || note.content.isNotBlank() ||
+            blocks.any { it is DocumentBlock.Image }
+
     fun saveAndExit() {
         if (isExiting) return  // 防止重复触发
         isExiting = true
         val note = buildNote()
-        if (note.title.isNotBlank() || note.content.isNotBlank()) {
+        if (hasContent(note)) {
             viewModel.saveNote(note) { onBack() }
         } else {
             onBack()
@@ -222,12 +295,16 @@ fun EditorScreen(
 
     BackHandler { saveAndExit() }
 
-    // 自动保存：仅在编辑现有笔记且未退出时触发，避免与返回保存重复
-    LaunchedEffect(title, content, selectedColor, isPinned, reminderAt) {
-        if (noteId != 0L && !isExiting) {
+    // 自动保存：仅在编辑现有笔记且未退出时触发，避免与返回保存重复。
+    // 以 blocks 为 key 触发，因此插入图片、拖拽改尺寸同样会触发自动保存。
+    //
+    // 必须带 noteLoaded：冷启动/深链进入时 DB 首帧是空的，existingNote 尚为 null，
+    // 此时若抢先保存会把空白内容写入（并覆盖）已有笔记。
+    LaunchedEffect(title, blocks, selectedColor, isPinned, reminderAt) {
+        if (noteId != 0L && !isExiting && noteLoaded) {
             delay(1500)
             val note = buildNote()
-            if (note.title.isNotBlank() || note.content.isNotBlank()) {
+            if (hasContent(note)) {
                 viewModel.saveNote(note) {}
             }
         }
@@ -261,6 +338,9 @@ fun EditorScreen(
                     }
                     if (noteId != 0L) {
                         IconButton(onClick = {
+                            // 先置退出标志：否则这次删除会与挂起的自动保存（1500ms 后写入）
+                            // 竞态，笔记可能被重新写回而「复活」。
+                            isExiting = true
                             existingNote?.let { viewModel.deleteNote(it) }
                             onBack()
                         }) {
@@ -360,30 +440,20 @@ fun EditorScreen(
                     }
                 }
 
-                BasicTextField(
-                    value = content,
-                    onValueChange = { content = it },
+                RichDocumentEditor(
+                    blocks = blocks,
+                    onBlocksChange = { blocks = it },
+                    imageStore = imageStore,
+                    onInsertImage = { index -> requestInsertImage(index) },
+                    onInsertText = { index -> insertTextAt(index) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
-                        .focusRequester(focusRequester),
-                    textStyle = TextStyle(
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp,
-                        color = MaterialTheme.colorScheme.onBackground
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { innerTextField ->
-                        if (content.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.content_hint),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        innerTextField()
-                    }
+                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+                    textColor = MaterialTheme.colorScheme.onBackground,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                    hintText = stringResource(R.string.content_hint),
+                    focusBlockId = focusBlockId,
+                    focusRequester = focusRequester
                 )
                 // 为浮动颜色条预留空间，避免最后一行被遮挡。
                 // 颜色条实际高度 = 内容 48dp(IconButton) + 内边距 10dp*2 + 外边距 10dp*2 = 88dp，
@@ -426,6 +496,14 @@ fun EditorScreen(
                         onColorSelected = { selectedColor = it.toArgb() },
                         modifier = Modifier.weight(1f)
                     )
+                    // 在正文末尾插入图片；也可点击正文中块与块之间的入口插入到指定位置
+                    IconButton(onClick = { requestInsertImage(blocks.size) }) {
+                        Icon(
+                            imageVector = Icons.Default.AddPhotoAlternate,
+                            contentDescription = stringResource(R.string.insert_image),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     // 提醒闹钟按钮
                     IconButton(onClick = {
                         if (reminderAt > 0L) {

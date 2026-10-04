@@ -7,9 +7,10 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-// version 升至 4：Note 实体新增 reminderAt 字段。
-// 通过显式 Migration 保留历史数据；fallbackToDestructiveMigration 仅作为兜底。
-@Database(entities = [Note::class], version = 4, exportSchema = false)
+// version 升至 5：Note 实体新增 richContent 字段（图文混排文档的 JSON 序列化）。
+// 所有升级路径均由显式 Migration 覆盖，保留历史数据；
+// fallbackToDestructiveMigrationOnDowngrade 仅在降级时兜底。
+@Database(entities = [Note::class], version = 5, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
 
@@ -30,6 +31,14 @@ abstract class NoteDatabase : RoomDatabase() {
             }
         }
 
+        // v4 -> v5：新增 richContent 列（图文混排文档）。
+        // 历史笔记该列为空串，读取时回退为「单段纯文本」，因此内容不丢失。
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN richContent TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var INSTANCE: NoteDatabase? = null
 
@@ -40,7 +49,7 @@ abstract class NoteDatabase : RoomDatabase() {
                     NoteDatabase::class.java,
                     "notes_database.db"
                 )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     // 仅在降级时销毁数据；升级路径必须由 Migration 覆盖，避免用户笔记丢失
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also {

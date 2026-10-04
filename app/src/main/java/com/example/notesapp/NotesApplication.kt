@@ -6,6 +6,7 @@ import com.example.notesapp.data.NoteDatabase
 import com.example.notesapp.data.NoteRepository
 import com.example.notesapp.notification.NotificationHelper
 import com.example.notesapp.notification.NotificationScheduler
+import com.example.notesapp.storage.NoteImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +22,10 @@ class NotesApplication : Application() {
     val repository: NoteRepository by lazy {
         NoteRepository(NoteDatabase.getInstance(this).noteDao())
     }
+
+    // 笔记内图片的内部存储（filesDir/note_images）。
+    // 放在 Application 上，保证全应用共用一个实例与同一个目录基准。
+    val imageStore: NoteImageStore by lazy { NoteImageStore(this) }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
