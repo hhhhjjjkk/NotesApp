@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,8 +40,11 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,6 +97,7 @@ sealed interface NoteImageState {
  * @param onAddTextAfterImage 在指定图片块之后插入文字块（由调用方负责生成 id 并聚焦）
  * @param focusBlockId 需要自动聚焦的文字块 id
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RichDocumentEditor(
     blocks: List<DocumentBlock>,
@@ -140,8 +145,26 @@ fun RichDocumentEditor(
             items(blocks, key = { it.id }) { block ->
                 // 用 id 作为 key：否则在中间插入块时后续槽位会被复用，
                 // 导致图片重新解码闪「加载中」、输入框的选区/输入法状态被邻块继承
-                    when (block) {
-                        is DocumentBlock.Text -> {
+                when (block) {
+                    is DocumentBlock.Text -> {
+                        val textFieldFocusRequester = remember { FocusRequester() }
+                        // 整行（含上下 padding）可点击聚焦，解决「点击空白区域无反应」问题
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .then(
+                                    if (block.id == focusBlockId && focusRequester != null) {
+                                        Modifier.focusRequester(focusRequester)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .combinedClickable(
+                                    onClick = { textFieldFocusRequester.requestFocus() },
+                                    onLongClick = {}
+                                )
+                        ) {
                             BasicTextField(
                                 value = block.text,
                                 onValueChange = { newText ->
@@ -152,16 +175,7 @@ fun RichDocumentEditor(
                                         }
                                     )
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .then(
-                                        if (block.id == focusBlockId && focusRequester != null) {
-                                            Modifier.focusRequester(focusRequester)
-                                        } else {
-                                            Modifier
-                                        }
-                                    ),
+                                modifier = Modifier.fillMaxWidth(),
                                 textStyle = TextStyle(
                                     fontSize = 16.sp,
                                     lineHeight = 24.sp,
@@ -181,36 +195,37 @@ fun RichDocumentEditor(
                                 }
                             )
                         }
+                    }
 
-                        is DocumentBlock.Image -> {
-                            EditableImageBlock(
-                                block = block,
-                                imageStore = imageStore,
-                                availableWidthPx = availableWidthPx,
-                                accentColor = accentColor,
-                                textColor = textColor,
-                                // 点图片本身：在其后插入文字块并聚焦，直接继续写字
-                                onClick = { onAddTextAfterImage(block.id) },
-                                onLongPress = { onInsertImageBefore(block.id) },
-                                onWidthFractionChange = { newFraction ->
-                                    // 按 id 匹配（而非下标），并在 EditableImageBlock 内部用
-                                    // rememberUpdatedState 读取本回调的最新版本；
-                                    // 列表本身也从 currentBlocks 读，避免用到旧快照
-                                    onBlocksChange(
-                                        currentBlocks.map {
-                                            if (it.id == block.id && it is DocumentBlock.Image) {
-                                                it.copy(widthFraction = newFraction)
-                                            } else {
-                                                it
-                                            }
+                    is DocumentBlock.Image -> {
+                        EditableImageBlock(
+                            block = block,
+                            imageStore = imageStore,
+                            availableWidthPx = availableWidthPx,
+                            accentColor = accentColor,
+                            textColor = textColor,
+                            // 点图片本身：在其后插入文字块并聚焦，直接继续写字
+                            onClick = { onAddTextAfterImage(block.id) },
+                            onLongPress = { onInsertImageBefore(block.id) },
+                            onWidthFractionChange = { newFraction ->
+                                // 按 id 匹配（而非下标），并在 EditableImageBlock 内部用
+                                // rememberUpdatedState 读取本回调的最新版本；
+                                // 列表本身也从 currentBlocks 读，避免用到旧快照
+                                onBlocksChange(
+                                    currentBlocks.map {
+                                        if (it.id == block.id && it is DocumentBlock.Image) {
+                                            it.copy(widthFraction = newFraction)
+                                        } else {
+                                            it
                                         }
-                                    )
-                                },
-                                onRemove = {
-                                    onBlocksChange(currentBlocks.filterNot { it.id == block.id })
-                                }
-                            )
-                        }
+                                    }
+                                )
+                            },
+                            onRemove = {
+                                onBlocksChange(currentBlocks.filterNot { it.id == block.id })
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -231,7 +246,7 @@ fun RichDocumentEditor(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun EditableImageBlock(
+fun EditableImageBlock(
     block: DocumentBlock.Image,
     imageStore: NoteImageStore,
     availableWidthPx: Float,
@@ -242,116 +257,130 @@ private fun EditableImageBlock(
     onWidthFractionChange: (Float) -> Unit,
     onRemove: () -> Unit
 ) {
-    val density = LocalDensity.current
-    val imageState by rememberNoteImageState(imageStore, block.fileName)
-
-    // ⚠️ 这三个值必须在 pointerInput 内部通过 rememberUpdatedState 读取最新版本。
-    //
-    // 原因：Modifier.pointerInput 的 equals 只比较 key、不比较 handler，key 不变时
-    // 该 modifier 节点不会被更新，节点里保存的始终是「首次组合时」的那个闭包。
-    // 若直接捕获 block/blocks，拖拽就会把旧的 blocks 快照写回状态 ——
-    // 表现为：打字后拖图片手柄，刚输入的文字回退；插入新图片块后拖旧图片，新块消失。
-    // 这类问题被 1.5s 后的自动保存固化后，就成了真实的数据丢失。
-    val currentFraction by rememberUpdatedState(block.widthFraction)
-    val currentWidthPx by rememberUpdatedState(availableWidthPx)
+    // 同一帧可能连续收到多次 onWidthFractionChange（拖拽抖动、多指），
+    // 为避免「后到先处理」覆盖前一个结果，用 rememberUpdatedState 捕获
+    // 当前闭包里的最新回调版本；外层 RichDocumentEditor 也用 currentBlocks
+    // 保证列表最新，双重保护防丢帧。
     val currentOnWidthFractionChange by rememberUpdatedState(onWidthFractionChange)
+    val currentWidthPx by rememberUpdatedState(availableWidthPx)
+    var currentFraction by remember { mutableStateOf<Float>(block.widthFraction) }
 
-    val widthDp = with(density) { (availableWidthPx * block.widthFraction).toDp() }
+    // 异步加载图片，状态为 Loading/Ready/Failed 三态。
+    val imageState by rememberNoteImageState(
+        imageStore = imageStore,
+        fileName = block.fileName,
+        maxDimension = NoteImageStore.DEFAULT_MAX_DIMENSION
+    )
 
     Box(
         modifier = Modifier
-            .width(widthDp)
-            .aspectRatio(block.aspectRatio)
-            .clip(RoundedCornerShape(12.dp))
-            .background(accentColor.copy(alpha = 0.06f))
-            // 点击图片主体 = 在其后插入文字块；长按 = 在其前插入图片。
-            // 手柄和删除按钮在图片之上，各自消费自己的事件，不会触发这里的 clickable。
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongPress
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .then(
+                // 图片块不需要外部 focusRequester，交互在图片内部处理
+                Modifier
             ),
         contentAlignment = Alignment.Center
     ) {
-        when (val state = imageState) {
-            is NoteImageState.Ready -> {
-                Image(
-                    bitmap = state.bitmap.asImageBitmap(),
-                    contentDescription = stringResource(R.string.note_image),
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
+        val onClick = onClick
+        val onLongPress = onLongPress
+        val onRemove = onRemove
+
+        Box(
+            modifier = Modifier
+                .width(with(LocalDensity.current) { (currentWidthPx * currentFraction).toDp() })
+                .aspectRatio(block.aspectRatio)
+                .clip(RoundedCornerShape(12.dp))
+                .background(accentColor.copy(alpha = 0.06f))
+                // 点击图片主体 = 在其后插入文字块；长按 = 在其前插入图片。
+                // 手柄和删除按钮在图片之上，各自消费自己的事件，不会触发这里的 clickable。
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongPress
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            when (val state = imageState) {
+                is NoteImageState.Ready -> {
+                    Image(
+                        bitmap = state.bitmap.asImageBitmap(),
+                        contentDescription = stringResource(R.string.note_image),
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                NoteImageState.Loading -> {
+                    Text(
+                        text = stringResource(R.string.image_loading),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textColor.copy(alpha = 0.5f)
+                    )
+                }
+                NoteImageState.Failed -> {
+                    Text(
+                        text = stringResource(R.string.image_missing),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textColor.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            // 删除按钮（右上角） — 扩大触摸热区到 48dp 最小尺寸（Material 3 标准）
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)  // 减小内边距，配合 44dp 容器达到 48dp 触摸区域
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable(onClick = onRemove),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.delete_image),
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
                 )
             }
-            NoteImageState.Loading -> {
-                Text(
-                    text = stringResource(R.string.image_loading),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textColor.copy(alpha = 0.5f)
-                )
-            }
-            NoteImageState.Failed -> {
-                Text(
-                    text = stringResource(R.string.image_missing),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textColor.copy(alpha = 0.5f)
+
+            // 右下角缩放拖拽手柄 — 扩大触摸热区到 48dp
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .pointerInput(block.id) {
+                        var working = currentFraction
+                        detectDragGestures(
+                            onDragStart = { working = currentFraction }
+                        ) { change, dragAmount ->
+                            // 消费事件，避免父级纵向滚动抢走手势
+                            change.consume()
+                            // 换算逻辑抽在 DocumentBlock.resizeWidthFraction，已被单元测试覆盖
+                            working = DocumentBlock.resizeWidthFraction(
+                                startFraction = working,
+                                dragX = dragAmount.x,
+                                availableWidthPx = currentWidthPx
+                            )
+                            currentOnWidthFractionChange(working)
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.OpenInFull,
+                    contentDescription = stringResource(R.string.resize_image),
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
 
-        // 删除按钮（右上角） — 扩大触摸热区到 48dp 最小尺寸（Material 3 标准）
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(4.dp)  // 减小内边距，配合 44dp 容器达到 48dp 触摸区域
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.35f))
-                .clickable(onClick = onRemove),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = stringResource(R.string.delete_image),
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        // 右下角缩放拖拽手柄 — 扩大触摸热区到 48dp
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(4.dp)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.35f))
-                .pointerInput(block.id) {
-                    var working = currentFraction
-                    detectDragGestures(
-                        onDragStart = { working = currentFraction }
-                    ) { change, dragAmount ->
-                        // 消费事件，避免父级纵向滚动抢走手势
-                        change.consume()
-                        // 换算逻辑抽在 DocumentBlock.resizeWidthFraction，已被单元测试覆盖
-                        working = DocumentBlock.resizeWidthFraction(
-                            startFraction = working,
-                            dragX = dragAmount.x,
-                            availableWidthPx = currentWidthPx
-                        )
-                        currentOnWidthFractionChange(working)
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.OpenInFull,
-                contentDescription = stringResource(R.string.resize_image),
-                tint = Color.White,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        Spacer(modifier = Modifier.height(2.dp))
     }
-
-    Spacer(modifier = Modifier.height(2.dp))
 }
 
 /**
