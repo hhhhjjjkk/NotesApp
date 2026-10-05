@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +95,13 @@ fun LiquidSegmentedSlider(
         }
     }
 
+    // ⚠️ pointerInput(Unit) 只在首次组合时创建一次手势识别器，其闭包里捕获的
+    // selected 始终是「首次组合时的值」。用户切换类型后 selected 已变化，但
+    // onDragCancel 里仍然读旧值——取消拖拽会把滑块弹回错误的（旧的）那一侧。
+    // 用 rememberUpdatedState 让手势闭包读取最新值，同时不改变 pointerInput 的 key
+    // （key 保持 Unit，避免拖动途中重启识别器导致手势中断）。
+    val currentSelected by rememberUpdatedState(selected)
+
     // 主题色：用于实时跟随滑块的染色高光带
     val primary = MaterialTheme.colorScheme.primary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -155,7 +163,7 @@ fun LiquidSegmentedSlider(
                     },
                     onDragCancel = {
                         dragging = false
-                        val target = if (selected == NoteType.TODO) 1f else 0f
+                        val target = if (currentSelected == NoteType.TODO) 1f else 0f
                         scope.launch {
                             animOffset.animateTo(target, springSpec)
                             stretch.animateTo(1f, springSpec)

@@ -9,6 +9,7 @@
     <string name="content_hint">写点什么…</string>
     <string name="insert_image">插入图片</string>
     <string name="image_import_failed">图片导入失败，请换一张试试</string>
+    <string name="image_inserted_hint">已插入图片。长按图片可在其前方插入新图片</string>
     <string name="insert_image_here">在此处插入图片</string>
     <string name="insert_text_here">在此处插入文字段落</string>
     <string name="note_image">笔记图片</string>
@@ -16,6 +17,9 @@
     <string name="image_missing">图片已丢失</string>
     <string name="delete_image">删除图片</string>
     <string name="resize_image">拖拽调整图片大小</string>
+    <string name="trashed_readonly">该笔记在回收站中，内容只读</string>
+    <string name="restore">恢复</string>
+    <string name="note_gone_readonly">笔记已被删除，未做任何修改</string>
     <string name="word_count">%1$d 字</string>
     <string name="settings">设置</string>
     <string name="theme">主题</string>

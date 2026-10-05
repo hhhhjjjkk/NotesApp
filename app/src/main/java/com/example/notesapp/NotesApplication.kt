@@ -4,6 +4,7 @@ import android.app.Application
 import com.example.notesapp.data.DataStoreManager
 import com.example.notesapp.data.NoteDatabase
 import com.example.notesapp.data.NoteRepository
+import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.notification.NotificationHelper
 import com.example.notesapp.notification.NotificationScheduler
 import com.example.notesapp.storage.NoteImageStore
@@ -49,6 +50,19 @@ class NotesApplication : Application() {
                 // 自动清理：物理删除移入回收站超过 30 天的笔记，避免无限堆积
                 val thirtyDaysAgo = now - TRASH_RETENTION_MILLIS
                 repository.clearTrashedBefore(thirtyDaysAgo)
+
+                // 清理孤儿图片：清库后再统计引用，保证 30 天过期删除的笔记图片也被回收。
+                // 宽限期 10 分钟，防止误删「刚导入、笔记还没保存」的文件。
+                val referenced = mutableSetOf<String>()
+                val allNotes = NoteDatabase.getInstance(this@NotesApplication).noteDao().getAllOnce()
+                allNotes.forEach { note ->
+                    referenced.addAll(
+                        RichDocumentCodec.referencedImageFiles(
+                            RichDocumentCodec.decode(note.richContent, note.content)
+                        )
+                    )
+                }
+                imageStore.cleanupOrphans(referenced, gracePeriodMs = IMAGE_GRACE_PERIOD_MS)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             }
@@ -58,5 +72,8 @@ class NotesApplication : Application() {
     private companion object {
         /** 回收站保留时长：30 天。 */
         const val TRASH_RETENTION_MILLIS = 30L * 24 * 60 * 60 * 1000
+
+        /** 启动清理孤儿图片的宽限期：10 分钟。 */
+        const val IMAGE_GRACE_PERIOD_MS = 10L * 60 * 1000
     }
 }

@@ -75,7 +75,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.notesapp.R
+import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.Note
+import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.data.ThemeMode
 import com.example.notesapp.ui.components.EmptyState
 import com.example.notesapp.ui.components.LiquidSegmentedSlider
@@ -551,9 +553,16 @@ fun HomeScreen(
                     icon = Icons.Default.IosShare,
                     title = stringResource(R.string.share),
                     onClick = {
+                        val imageCount = RichDocumentCodec.decode(note.richContent, note.content)
+                            .count { it is DocumentBlock.Image }
                         val shareText = buildString {
                             if (note.title.isNotBlank()) appendLine(note.title)
                             append(note.content)
+                            // 纯文本通道带不走图片，明确标注数量，避免接收方以为内容缺失
+                            if (imageCount > 0) {
+                                if (isNotEmpty()) appendLine()
+                                append("[包含 ${imageCount} 张图片]")
+                            }
                         }
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"

@@ -22,10 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
@@ -89,13 +87,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
-/**
- * 编辑页底部浮动颜色条的总占位高度。
- * 颜色条实际高度 = 内容 48dp(IconButton) + 内边距 10dp*2 + 外边距 10dp*2 = 88dp，
- * 再额外预留 8dp 视觉间隔，确保正文最后一行不被颜色条遮挡。
- */
-private val ColorBarReservedHeight = 96.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,6 +168,12 @@ fun EditorScreen(
             } else {
                 blocks = updated
             }
+            // 插图提示：告诉用户长按图片可在其前插入
+            Toast.makeText(
+                context,
+                context.getString(R.string.image_inserted_hint),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -272,10 +269,19 @@ fun EditorScreen(
     }
 
     // key 含 existingNote：冷启动经通知深链直达编辑页时，allActiveNotes 首帧为空，
-    // existingNote 为 null；待 DB 发射、existingNote 变非空后 effect 需重跑加载
+    // existingNote 为 null；待 DB 发射、existingNote 变非空后 effect 需重跑加载。
+    // 数据库直达查询兜底：深链指向回收站笔记时 allActiveNotes 查不到（只含未删除的），
+    // 需单独按 id 查询，才能显示「已移入回收站」而不是当作空白笔记。
+    var isTrashedNote by rememberSaveable { mutableStateOf(false) }
+    // 回收站笔记的引用：当笔记不在 allActiveNotes（已被移入回收站），通过直接查库找到时，
+    // existingNote 仍为 null，但「恢复」按钮需要一个 Note 对象来 restoreFromTrash。
+    // 这里用单独的状态保存查到的那条记录，供恢复按钮使用。
+    var trashedNoteRef by remember { mutableStateOf<Note?>(null) }
     LaunchedEffect(noteId, existingNote) {
         if (!noteLoaded && existingNote != null) {
             existingNote.let {
+                isTrashedNote = it.isTrashed
+                if (it.isTrashed) trashedNoteRef = it
                 title = it.title
                 // 旧笔记 richContent 为空，会退回为「单段纯文本」，因此历史内容不丢
                 blocks = RichDocumentCodec.decode(it.richContent, it.content)
@@ -284,6 +290,22 @@ fun EditorScreen(
                 reminderAt = it.reminderAt
                 noteLoaded = true
             }
+        }
+    }
+    LaunchedEffect(noteId, noteLoaded, existingNote) {
+        if (!noteLoaded && noteId != 0L && existingNote == null) {
+            // allActiveNotes 不含回收站笔记，直接查库兜底
+            val found = viewModel.getNoteById(noteId) ?: return@LaunchedEffect
+            isTrashedNote = found.isTrashed
+            if (found.isTrashed) trashedNoteRef = found
+            title = found.title
+            blocks = RichDocumentCodec.decode(found.richContent, found.content)
+            selectedColor = found.color
+            isPinned = found.isPinned
+            reminderAt = found.reminderAt
+            noteLoaded = true
+            // found == null 时保持空白编辑页；保存时 Repository 会拒绝凭空重建（返回 null），
+            // 因此不会覆盖任何数据。
         }
     }
 
@@ -319,9 +341,29 @@ fun EditorScreen(
     fun saveAndExit() {
         if (isExiting) return  // 防止重复触发
         isExiting = true
+        // 回收站笔记只读展示：退出时不保存（保存会通过 Repository 的 update 分支，
+        // 虽然不会覆盖 isTrashed，但用户在回收站视图里的编辑本来就不该生效），
+        // 也不弹失败提示——用户只是看了一眼笔记。
+        if (isTrashedNote) {
+            onBack()
+            return
+        }
         val note = buildNote()
         if (hasContent(note)) {
-            viewModel.saveNote(note) { onBack() }
+            viewModel.saveNote(
+                note,
+                onSaved = { onBack() },
+                onFailed = {
+                    // 目标笔记已不存在（如通知深链指向被删除的笔记）。
+                    // 不保存任何内容，直接返回，避免覆盖或凭空重建。
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.note_gone_readonly),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    onBack()
+                }
+            )
         } else {
             onBack()
         }
@@ -334,8 +376,9 @@ fun EditorScreen(
     //
     // 必须带 noteLoaded：冷启动/深链进入时 DB 首帧是空的，existingNote 尚为 null，
     // 此时若抢先保存会把空白内容写入（并覆盖）已有笔记。
+    // 必须带 !isTrashedNote：回收站笔记只读展示，自动保存会把 isTrashed 状态改回去。
     LaunchedEffect(title, blocks, selectedColor, isPinned, reminderAt) {
-        if (noteId != 0L && !isExiting && noteLoaded) {
+        if (noteId != 0L && !isExiting && noteLoaded && !isTrashedNote) {
             delay(1500)
             val note = buildNote()
             if (hasContent(note)) {
@@ -413,7 +456,6 @@ fun EditorScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
-                    .verticalScroll(rememberScrollState())
             ) {
                 BasicTextField(
                     value = title,
@@ -439,6 +481,40 @@ fun EditorScreen(
                         innerTextField()
                     }
                 )
+
+                // 回收站只读横幅：通知深链可能直达已移入回收站的笔记。
+                // 此时禁止编辑保存（避免覆盖回收站状态），提供一键恢复。
+                if (isTrashedNote) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.trashed_readonly),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = stringResource(R.string.restore),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable {
+                                // 恢复后按当前编辑内容保存为新状态，并退出只读
+                                val base = existingNote ?: trashedNoteRef ?: return@clickable
+                                viewModel.restoreNote(base) {
+                                    isTrashedNote = false
+                                    saveAndExit()
+                                }
+                            }
+                        )
+                    }
+                }
 
                 // 提醒状态显示行（移到 Scaffold 内部，紧跟标题下方，避免重叠 TopAppBar）
                 if (reminderAt > 0L) {
@@ -481,7 +557,7 @@ fun EditorScreen(
                     onAddTextAfterImage = { imageId -> insertTextAfterImage(imageId) },
                     onInsertImageBefore = { imageId -> insertImageBefore(imageId) },
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
                     textColor = MaterialTheme.colorScheme.onBackground,
                     cursorColor = MaterialTheme.colorScheme.primary,
@@ -489,10 +565,6 @@ fun EditorScreen(
                     focusBlockId = focusBlockId,
                     focusRequester = focusRequester
                 )
-                // 为浮动颜色条预留空间，避免最后一行被遮挡。
-                // 颜色条实际高度 = 内容 48dp(IconButton) + 内边距 10dp*2 + 外边距 10dp*2 = 88dp，
-                // 这里再多留 8dp 视觉间隔，避免正文最后一行紧贴颜色条。
-                Spacer(modifier = Modifier.height(ColorBarReservedHeight))
             }
 
             // 浮动颜色调节条：通过 imePadding 跟随键盘自动浮起

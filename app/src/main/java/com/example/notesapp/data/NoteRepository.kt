@@ -20,8 +20,33 @@ class NoteRepository(private val noteDao: NoteDao) {
 
     suspend fun getNoteById(id: Long): Note? = noteDao.getNoteById(id)
 
-    // 始终用 insert(REPLACE)，既能新建也能更新；撤销删除时也用它恢复
-    suspend fun saveNote(note: Note): Long = noteDao.insert(note)
+    /**
+     * 保存笔记，区分「新建」与「更新」：
+     * - id == 0：INSERT 新行
+     * - id != 0：UPDATE；若该 id 已不存在则返回 null（而不是像 REPLACE 那样凭空造出行来覆盖）。
+     *
+     * 之前一律 INSERT(REPLACE)，在「通知深链指向已删除/已回收笔记」时，编辑页以同 id 保存
+     * 会凭空重建一行、把回收站状态与图文内容一并覆盖，造成数据丢失。
+     */
+    suspend fun saveNote(note: Note): Long? {
+        if (note.id == 0L) {
+            return noteDao.insert(note)
+        }
+        val existing = noteDao.getNoteById(note.id) ?: return null
+        noteDao.update(existing.copy(
+            title = note.title,
+            content = note.content,
+            richContent = note.richContent,
+            color = note.color,
+            isPinned = note.isPinned,
+            type = note.type,
+            reminderAt = note.reminderAt,
+            updatedAt = note.updatedAt
+            // 刻意不覆盖 isTrashed/trashedAt/createdAt：这些是生命周期状态，
+            // 编辑保存不应改变「是否在回收站」或创建时间
+        ))
+        return note.id
+    }
 
     // 物理删除（仅回收站永久删除使用）
     suspend fun deleteNote(note: Note) = noteDao.delete(note)

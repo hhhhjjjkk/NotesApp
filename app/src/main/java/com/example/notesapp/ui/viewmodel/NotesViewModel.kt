@@ -1,13 +1,14 @@
 package com.example.notesapp.ui.viewmodel
 
-import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.notesapp.NotesApplication
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.NoteRepository
+import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.data.NoteType
 import com.example.notesapp.notification.NotificationScheduler
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +24,7 @@ import kotlinx.coroutines.launch
 
 class NotesViewModel(
     private val repository: NoteRepository,
-    private val app: Application
+    private val app: NotesApplication
 ) : ViewModel() {
 
     companion object {
@@ -32,6 +33,12 @@ class NotesViewModel(
 
         /** 搜索输入防抖时长：避免每次按键都触发一次数据库查询。 */
         private const val SEARCH_DEBOUNCE_MS = 250L
+
+        /**
+         * 孤儿清理的宽限期：文件创建后 10 分钟内不清理。
+         * 覆盖「已导入文件、但笔记尚未保存（自动保存 1.5s + 网络盘延迟）」的窗口期。
+         */
+        const val GRACE_PERIOD_MS = 10L * 60 * 1000
     }
 
     private val searchQuery = MutableStateFlow("")
@@ -79,9 +86,32 @@ class NotesViewModel(
         currentType.value = type
     }
 
-    fun saveNote(note: Note, onSaved: (Long) -> Unit = {}) {
+    /** 按 id 查询笔记（含回收站），供通知深链进入编辑页时兜底加载。 */
+    suspend fun getNoteById(id: Long): Note? = repository.getNoteById(id)
+
+    /** 从编辑页把回收站笔记恢复为正常笔记。 */
+    fun restoreNote(note: Note, onRestored: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.restoreFromTrash(note)
+            NotificationScheduler.schedule(app, note)
+            onRestored()
+        }
+    }
+
+    /**
+     * 保存笔记。
+     *
+     * @param onSaved 保存成功后回调（id）
+     * @param onFailed 目标笔记已不存在（被删除，返回 null）时回调；
+     *                 不回调 [onSaved]，避免把「不存在的笔记」当成保存成功。
+     */
+    fun saveNote(note: Note, onSaved: (Long) -> Unit = {}, onFailed: () -> Unit = {}) {
         viewModelScope.launch {
             val id = repository.saveNote(note)
+            if (id == null) {
+                onFailed()
+                return@launch
+            }
             // 保存后调度或取消提醒闹钟
             val savedNote = note.copy(id = id)
             NotificationScheduler.schedule(app, savedNote)
@@ -131,6 +161,7 @@ class NotesViewModel(
         viewModelScope.launch {
             repository.deleteNote(note)
             NotificationScheduler.cancel(app, note.id)
+            cleanupImageOrphans()
         }
     }
 
@@ -139,6 +170,31 @@ class NotesViewModel(
             // 取消所有回收站笔记的提醒
             trashedNotes.value.forEach { NotificationScheduler.cancel(app, it.id) }
             repository.clearTrashed()
+            cleanupImageOrphans()
+        }
+    }
+
+    /**
+     * 清理不再被任何笔记引用的图片文件。
+     *
+     * 安全约束（防止误删）：
+     * - 引用集合来自**全部**笔记（活动 + 回收站）。回收站里的笔记仍可能被恢复，其图片必须保留
+     * - 保留最近 [GRACE_PERIOD_MS] 内新增的文件：导入刚完成、笔记还没保存时，
+     *   文件短暂处于「未被引用」状态，立即清理会把刚导入的图删掉
+     * - 只在明确的删除动作后触发（永久删除 / 清空回收站 / 应用启动），
+     *   不在每次保存后触发——撤销与自动保存并存时，短暂未引用不代表真的没人用
+     */
+    fun cleanupImageOrphans() {
+        viewModelScope.launch {
+            val referenced = mutableSetOf<String>()
+            (allActiveNotes.value + trashedNotes.value).forEach { note ->
+                referenced.addAll(
+                    RichDocumentCodec.referencedImageFiles(
+                        RichDocumentCodec.decode(note.richContent, note.content)
+                    )
+                )
+            }
+            app.imageStore.cleanupOrphans(referenced, gracePeriodMs = GRACE_PERIOD_MS)
         }
     }
 

@@ -13,6 +13,10 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE isTrashed = 0 ORDER BY isPinned DESC, updatedAt DESC")
     fun getAllNotes(): Flow<List<Note>>
 
+    /** 一次性读取全部笔记（含回收站），供启动时清理孤儿图片统计引用。 */
+    @Query("SELECT * FROM notes")
+    suspend fun getAllOnce(): List<Note>
+
     @Query("SELECT * FROM notes WHERE isTrashed = 0 AND type = :type ORDER BY isPinned DESC, updatedAt DESC")
     fun getNotesByType(type: Int): Flow<List<Note>>
 

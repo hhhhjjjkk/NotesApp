@@ -4,8 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
+import androidx.exifinterface.media.ExifInterface
 import com.example.notesapp.data.DocumentBlock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -115,16 +117,25 @@ class NoteImageStore(private val context: Context) {
      *
      * 注意：**不要**在每次保存后立即调用。自动保存与撤销/回收站并存时，
      * 短暂「未被引用」的图片可能马上又被引用回来，立即清理会造成丢图。
-     * 建议仅在明确的操作后（如永久删除笔记、清空回收站）调用，
+     * 建议仅在明确的操作后（如永久删除笔记、清空回收站、应用启动）调用，
      * 且传入当前全部笔记（含回收站）的引用集合。
+     *
+     * @param gracePeriodMs 宽限期：文件创建后该时长内不清理。
+     *   覆盖「文件刚导入、笔记尚未保存」的窗口期——此时文件还没被任何笔记引用，
+     *   但马上就会被引用；不加宽限期会把用户刚导入的图删掉。
      */
-    suspend fun cleanupOrphans(referencedFiles: Set<String>) = withContext(Dispatchers.IO) {
-        val dir = imageDir()
-        val files = dir.listFiles() ?: return@withContext
-        for (file in files) {
-            if (file.name !in referencedFiles) file.delete()
+    suspend fun cleanupOrphans(referencedFiles: Set<String>, gracePeriodMs: Long = 0L) =
+        withContext(Dispatchers.IO) {
+            val dir = imageDir()
+            val files = dir.listFiles() ?: return@withContext
+            val now = System.currentTimeMillis()
+            for (file in files) {
+                if (file.name in referencedFiles) continue
+                // 宽限期内的新文件一律保留（lastModified 在导入完成时写入）
+                if (gracePeriodMs > 0L && now - file.lastModified() < gracePeriodMs) continue
+                file.delete()
+            }
         }
-    }
 
     /** 当前目录下全部图片文件名，供调用方与引用集合比对。 */
     fun listImageFiles(): Set<String> {
@@ -159,6 +170,10 @@ class NoteImageStore(private val context: Context) {
     /**
      * 读取宽高比。优先用 [ImageDecoder]，因为它会正确应用 EXIF 旋转
      * （手机竖拍的照片在原始像素里常是横的，不处理会导致方向错乱）。
+     *
+     * 后备路径（[BitmapFactory]，API < 28 或 ImageDecoder 失败时）只报告原始像素尺寸，
+     * 不会应用 EXIF 方向，因此这里额外用 [ExifInterface] 读出旋转角：
+     * 90/270 度时宽高对调，得到与 ImageDecoder 一致、符合人眼观感的宽高比。
      */
     private fun readAspectRatio(file: File): Float? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -182,7 +197,10 @@ class NoteImageStore(private val context: Context) {
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, options)
         if (options.outWidth <= 0 || options.outHeight <= 0) return null
-        return options.outWidth.toFloat() / options.outHeight.toFloat()
+        val rotated = rotationIsSideways(file)
+        val width = if (rotated) options.outHeight else options.outWidth
+        val height = if (rotated) options.outWidth else options.outHeight
+        return width.toFloat() / height.toFloat()
     }
 
     private fun decodeDownsampled(file: File, maxDimension: Int): Bitmap? {
@@ -213,6 +231,39 @@ class NoteImageStore(private val context: Context) {
         }
 
         val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        return BitmapFactory.decodeFile(file.absolutePath, options)
+        val decoded = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
+        val rotation = readRotation(file)
+        if (rotation == 0f) return decoded
+        // BitmapFactory 不应用 EXIF 方向，需手动旋转；ImageDecoder 分支已在内部处理，不会走到这里。
+        val matrix = Matrix().apply { postRotate(rotation) }
+        val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        if (rotated != decoded) decoded.recycle()
+        return rotated
+    }
+
+    /**
+     * 读取 EXIF 旋转角（度）。返回 0 / 90 / 180 / 270 之一，读取失败时返回 0（不旋转）。
+     * [ExifInterface] 在所有 API 级别可用（内部对 HEIF 等格式有专门处理），
+     * 是补齐 [BitmapFactory] 不会自动应用方向的唯一可靠手段。
+     */
+    private fun readRotation(file: File): Float = runCatching {
+        ExifInterface(file.absolutePath)
+            .getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL).let { orientation ->
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+    }
+
+    /** 旋转角是否为 90/270 度（即宽高需要交换）。 */
+    private fun rotationIsSideways(file: File): Boolean {
+        val r = readRotation(file)
+        return r == 90f || r == 270f
     }
 }

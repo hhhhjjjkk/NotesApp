@@ -8,7 +8,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -127,11 +130,16 @@ fun RichDocumentEditor(
             }
         }
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            blocks.forEachIndexed { index, block ->
+        // LazyColumn：只有进入可视区域的块才参与组合与位图解码，
+        // 图片很多时不会再把全部 Bitmap 同时驻留内存（此前是普通 Column，有 OOM 风险）。
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            // 底部留出空间，避免最后一块内容被编辑页的浮动颜色条遮挡
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            items(blocks, key = { it.id }) { block ->
                 // 用 id 作为 key：否则在中间插入块时后续槽位会被复用，
                 // 导致图片重新解码闪「加载中」、输入框的选区/输入法状态被邻块继承
-                key(block.id) {
                     when (block) {
                         is DocumentBlock.Text -> {
                             BasicTextField(
@@ -203,7 +211,6 @@ fun RichDocumentEditor(
                                 }
                             )
                         }
-                    }
                 }
             }
         }
@@ -290,12 +297,12 @@ private fun EditableImageBlock(
             }
         }
 
-        // 删除按钮（右上角）
+        // 删除按钮（右上角） — 扩大触摸热区到 48dp 最小尺寸（Material 3 标准）
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(6.dp)
-                .size(26.dp)
+                .padding(4.dp)  // 减小内边距，配合 44dp 容器达到 48dp 触摸区域
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.35f))
                 .clickable(onClick = onRemove),
@@ -305,17 +312,16 @@ private fun EditableImageBlock(
                 imageVector = Icons.Default.Close,
                 contentDescription = stringResource(R.string.delete_image),
                 tint = Color.White,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
-        // 右下角缩放拖拽手柄。key 只用 block.id：
-        // 若把可变的宽度也放进 key，拖拽途中会重启 pointerInput 导致手势中断。
+        // 右下角缩放拖拽手柄 — 扩大触摸热区到 48dp
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(6.dp)
-                .size(30.dp)
+                .padding(4.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.35f))
                 .pointerInput(block.id) {
@@ -340,7 +346,7 @@ private fun EditableImageBlock(
                 imageVector = Icons.Default.OpenInFull,
                 contentDescription = stringResource(R.string.resize_image),
                 tint = Color.White,
-                modifier = Modifier.size(15.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
     }

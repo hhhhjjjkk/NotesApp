@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.notesapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "3.4.1"
+        versionCode = 27
+        versionName = "3.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -75,10 +75,14 @@ dependencies {
     // SplashScreen（消除冷启动白屏，适配 Android 12+）
     implementation(libs.androidx.core.splashscreen)
 
+    // ExifInterface：读取图片 EXIF 方向，修正旧设备上竖拍照片旋转
+    implementation(libs.androidx.exifinterface)
+
     // Haze：真实背景模糊，用于毛玻璃（frosted glass）效果
 
     // Testing
     testImplementation(libs.junit)
+    testImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
