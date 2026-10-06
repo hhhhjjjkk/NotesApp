@@ -89,3 +89,7 @@ fun Color.darken(factor: Float = 0.3f): Color {
         alpha = alpha
     )
 }
+
+/** 依据 RGB 亮度判断深浅（忽略 alpha），供玻璃/明暗分支判断复用。 */
+fun Color.isDarkColor(): Boolean =
+    (0.299f * red + 0.587f * green + 0.114f * blue) < 0.5f
