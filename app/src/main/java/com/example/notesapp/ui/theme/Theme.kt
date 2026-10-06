@@ -24,18 +24,30 @@ private val DarkColorScheme = darkColorScheme(
     tertiary = AndroidBlue,
     background = DarkBackground,
     surface = DarkCardBackground,
+    surfaceVariant = Color(0xFF3A3A3A),
+    surfaceContainer = Color(0xFF2A2A2A),
+    surfaceContainerHigh = Color(0xFF353535),
     onBackground = Color.White,
-    onSurface = Color.White
+    onSurface = Color.White,
+    onSurfaceVariant = Color(0xFFC4C4C4),
+    outline = Color(0xFF565656),
+    outlineVariant = Color(0xFF404040)
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = AndroidBlue,
     secondary = AndroidBlue,
     tertiary = AndroidBlue,
-    background = Color(0xFFFDFDFD),
+    background = Color(0xFFF7F7F9),
     surface = Color.White,
+    surfaceVariant = Color(0xFFF0F0F3),
+    surfaceContainer = Color(0xFFFCFCFC),
+    surfaceContainerHigh = Color(0xFFF2F2F5),
     onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F)
+    onSurface = Color(0xFF1C1B1F),
+    onSurfaceVariant = Color(0xFF6E6E73),
+    outline = Color(0xFF8A8A8F),
+    outlineVariant = Color(0xFFE3E3E8)
 )
 
 @Composable

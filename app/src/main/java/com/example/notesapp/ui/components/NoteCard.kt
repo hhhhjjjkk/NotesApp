@@ -177,8 +177,12 @@ fun NoteCard(
             colors = CardDefaults.cardColors(containerColor = cardColor),
             shape = shape,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            // 非选中态不画边框，仅选中态显示强调色描边
-            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+            // 选中态画强调色描边；关闭阴影时画细边框，保证卡片在浅色背景上仍轮廓分明
+            border = when {
+                isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                !shadowEnabled -> BorderStroke(1.dp, contentColor.copy(alpha = 0.10f))
+                else -> null
+            }
         ) {
         Box {
             Row(modifier = Modifier.fillMaxWidth()) {
