@@ -123,8 +123,6 @@ fun HomeScreen(
     val noteType by viewModel.noteType.collectAsStateWithLifecycle()
 
     val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
-    val backgroundUri by settingsViewModel.backgroundUri.collectAsStateWithLifecycle()
-    val hasCustomBackground = !backgroundUri.isNullOrBlank()
     val cardRadius by settingsViewModel.cardRadius.collectAsStateWithLifecycle()
     val cardShadow by settingsViewModel.cardShadow.collectAsStateWithLifecycle()
     val cardTransparency by settingsViewModel.cardTransparency.collectAsStateWithLifecycle()
@@ -227,21 +225,19 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(MaterialTheme.colorScheme.background)
+            // 刻意**不**在这里铺不透明背景色：
+            // 上层由 MainActivity 的 AppBackground 负责绘制（可含模糊壁纸），
+            // 这里再盖一层不透明色会让壁纸与模糊完全不可见，玻璃卡片也就失去了衬托。
+            // Scaffold 的 containerColor 已在主题层设成透明/半透明，与本处保持一致。
         ) {
             // 搜索栏固定为顶部浮层：抬高层级，避免列表向上滚动时卡片文字从下方穿透。
-            // 默认纯色背景时加不透明底色遮挡穿透内容；自定义壁纸时保持透明，
-            // 以保留毛玻璃观感，不与背景层产生冲突。
+            // 搜索栏自身用半透明玻璃底色，既遮挡穿透内容又保留背后的壁纸观感。
             SearchBar(
                 query = searchQuery,
                 onQueryChange = viewModel::onSearchQueryChange,
+                isDark = isDark,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(
-                        // 自定义壁纸下保持透明以保留毛玻璃观感
-                        if (hasCustomBackground) Modifier
-                        else Modifier.background(MaterialTheme.colorScheme.background)
-                    )
                     .zIndex(1f)
             )
 

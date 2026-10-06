@@ -25,6 +25,36 @@ val CoralOrange = Color(0xFFFF7043)
 val RosePink = Color(0xFFF06292)
 val MorandiTeal = Color(0xFF4DB6AC)
 
+// ===== 玻璃质感令牌 =====
+// 玻璃表面 = 半透明底色 + 顶部高光 + 发丝描边（后两者由 liquidGlassSurface 绘制）。
+// 这里的停产色只负责「底色」那一层，因此都用较高的 alpha（0.6~0.85）：
+// 太低会让壁纸细节穿透到看不清文字，太高则失去玻璃的通透感。
+
+/** 浅色模式玻璃底色：偏白，让卡片在浅背景上浮起来 */
+val GlassLightSurface = Color(0xFFFFFFFF).copy(alpha = 0.72f)
+
+/** 深色模式玻璃底色：偏深灰，保留层次但不至于纯黑 */
+val GlassDarkSurface = Color(0xFF2A2A2E).copy(alpha = 0.68f)
+
+/** 玻璃上的浮层（底部工具条、悬浮栏）：需要比普通卡片更实，避免其下内容干扰阅读 */
+val GlassLightElevated = Color(0xFFFFFFFF).copy(alpha = 0.86f)
+val GlassDarkElevated = Color(0xFF323236).copy(alpha = 0.82f)
+
+/** 玻璃描边：浅色下用极淡的黑，深色下用极淡的白 */
+val GlassLightBorder = Color(0x14000000)
+val GlassDarkBorder = Color(0x1FFFFFFF)
+
+/**
+ * 把笔记卡片的柔和色转成**玻璃用底色**：在浅色下把颜色往白里提一点，
+ * 既保留颜色辨识度（用户靠颜色区分笔记），又让高光有发挥空间。
+ * 深色下压暗并压低饱和，避免彩色卡片在暗背景上过于刺眼。
+ */
+fun Color.toGlassSurface(isDark: Boolean): Color = if (isDark) {
+    darken(0.55f).copy(alpha = 0.62f)
+} else {
+    this.copy(alpha = 0.78f)
+}
+
 val noteCardColors = listOf(
     NoteYellow,
     NoteGreen,

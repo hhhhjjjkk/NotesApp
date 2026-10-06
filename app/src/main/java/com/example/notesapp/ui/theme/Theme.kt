@@ -66,17 +66,14 @@ fun NotesAppTheme(
 ) {
     val accent = themeColor.toComposeColor()
     val hasCustomBackground = !backgroundUri.isNullOrBlank()
-    // 有自定义背景时：background 设为透明，让 AppBackground 单独负责绘制背景图+遮罩，
-    // 避免 Scaffold.containerColor 再叠一层遮罩导致实际比 dim 设置值更暗（双遮罩叠加）
-    // 无自定义背景时：使用正常不透明背景色
-    val resolvedBackground = if (hasCustomBackground) Color.Transparent
-        else resolveBackgroundColor(hasCustomBackground, darkTheme, backgroundDim)
-    // surface 比 background 略不透明，保留层次感但避免色差过大
-    val resolvedSurface = if (hasCustomBackground) {
-        resolveBackgroundColor(hasCustomBackground, darkTheme, (backgroundDim + 0.08f).coerceAtMost(0.92f))
-    } else {
-        resolvedBackground
-    }
+    // background 始终透明：背景绘制权交给 MainActivity 里的 AppBackground 一层
+    // （它负责壁纸模糊 + 遮罩，或无壁纸时的底色 + 渐变）。
+    // 若这里返回不透明色，会把 AppBackground 画的渐变整个盖住，玻璃也就失去了衬托。
+    val resolvedBackground = resolveBackgroundColor(hasCustomBackground, darkTheme, backgroundDim)
+    // surface 必须**保持半透明但可见**：底部弹窗、浮动工具条都靠它取底色，
+    // 设成透明会让这些浮层连同其下内容糊在一起、完全不可读。
+    // 用玻璃底色而不是纯色，是为了让浮层与整体玻璃语言一致。
+    val resolvedSurface = if (darkTheme) GlassDarkElevated else GlassLightElevated
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

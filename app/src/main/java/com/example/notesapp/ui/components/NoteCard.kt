@@ -58,6 +58,7 @@ import com.example.notesapp.ui.theme.MarkdownBlock
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.parseMarkdown
 import com.example.notesapp.ui.theme.rememberPressableGlassScale
+import com.example.notesapp.ui.theme.toGlassSurface
 import com.example.notesapp.ui.theme.toNoteColor
 import androidx.compose.foundation.shape.RoundedCornerShape
 import java.text.SimpleDateFormat
@@ -93,12 +94,15 @@ fun NoteCard(
     }
 
     val baseColor = note.color.toNoteColor(isDark)
-    // 透明度开关：transparency=0 完全不透明；>0 时降低 alpha，让背景图透过来
-    // 限制最大透明度 0.85，避免卡片内容不可读
+    // 玻璃底色：默认就带一定半透明（否则玻璃高光与壁纸都透不出来，玻璃感无从谈起）。
+    // 用户设置的 transparency 在此基础上**继续**降低 alpha，两者叠加而不是互相覆盖，
+    // 这样「玻璃默认观感」与「用户想要更透」两个诉求都能满足。
+    // 上限 0.85 保证内容始终可读（低于此值时文字对比度会明显不足）。
+    val glassBase = baseColor.toGlassSurface(isDark)
     val cardColor = if (transparency > 0f) {
-        baseColor.copy(alpha = (1f - transparency * 0.85f).coerceIn(0.15f, 1f))
+        glassBase.copy(alpha = (glassBase.alpha - transparency * 0.6f).coerceIn(0.15f, 1f))
     } else {
-        baseColor
+        glassBase
     }
     val contentColor = if (cardColor.isDark()) {
         Color.White
@@ -172,17 +176,20 @@ fun NoteCard(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                // 扁平化表面：无高光渐变与描边，层次由背景色与阴影表达
-                .liquidGlassSurface(shape = shape, isDark = isDark),
-            colors = CardDefaults.cardColors(containerColor = cardColor),
+                // 玻璃表面：由 tint 画半透明底色，再叠顶部高光与发丝描边。
+                // 底色交给这里而不是 Card 的 containerColor，是因为 Card 会在内容层
+                // 内部先画自己的背景，会把高光盖住；详见 liquidGlassSurface 的绘制顺序说明。
+                .liquidGlassSurface(shape = shape, isDark = isDark, tint = cardColor),
+            // containerColor 必须透明：底色（cardColor）已作为 tint 交给玻璃层绘制，
+            // 两边都画会叠成双倍不透明度，玻璃就变成了不透明色块。
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             shape = shape,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            // 选中态画强调色描边；关闭阴影时画细边框，保证卡片在浅色背景上仍轮廓分明
-            border = when {
-                isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                !shadowEnabled -> BorderStroke(1.dp, contentColor.copy(alpha = 0.10f))
-                else -> null
-            }
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (shadowEnabled) 2.dp else 0.dp
+            ),
+            // 只用边框表达「选中」这一种强状态；未选中时的轮廓交给玻璃的发丝描边，
+            // 避免玻璃描边与 Card 边框叠成两层、线条变粗发脏。
+            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
         ) {
         Box {
             Row(modifier = Modifier.fillMaxWidth()) {
