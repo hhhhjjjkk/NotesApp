@@ -7,10 +7,12 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-// version 升至 5：Note 实体新增 richContent 字段（图文混排文档的 JSON 序列化）。
+// version 升至 6：为 notes 表补充查询索引（见 Note 实体上的 indices 注解）。
+// 索引只改变查询计划、不改变任何数据，迁移用 CREATE INDEX IF NOT EXISTS，
+// 老用户升级零数据迁移、零丢失。
 // 所有升级路径均由显式 Migration 覆盖，保留历史数据；
 // fallbackToDestructiveMigrationOnDowngrade 仅在降级时兜底。
-@Database(entities = [Note::class], version = 5, exportSchema = false)
+@Database(entities = [Note::class], version = 6, exportSchema = false)
 abstract class NoteDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
 
@@ -74,6 +76,24 @@ abstract class NoteDatabase : RoomDatabase() {
             }
         }
 
+        // v5 -> v6：为 notes 表创建查询索引。
+        // 注意：索引名必须与 Room 根据 @Entity(indices=[...]) 期望的默认名完全一致
+        // （格式 index_<表名>_<列名>，多列用下划线连接），否则 Room 编译期校验会失败，
+        // 或运行时抛「Migration didn't properly handle」。
+        // IF NOT EXISTS 保证重复升级（例如用户从 v4 直接到 v6 后再触发）不会报错。
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_notes_isTrashed_type_isPinned_updatedAt` " +
+                        "ON `notes` (`isTrashed`, `type`, `isPinned`, `updatedAt`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_notes_isTrashed_trashedAt` " +
+                        "ON `notes` (`isTrashed`, `trashedAt`)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: NoteDatabase? = null
 
@@ -84,7 +104,9 @@ abstract class NoteDatabase : RoomDatabase() {
                     NoteDatabase::class.java,
                     "notes_database.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6
+                    )
                     // 仅在降级时销毁数据；升级路径必须由 Migration 覆盖，避免用户笔记丢失
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build().also {

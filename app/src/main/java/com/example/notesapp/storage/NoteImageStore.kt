@@ -2,6 +2,7 @@ package com.example.notesapp.storage
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.LruCache
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.graphics.Matrix
@@ -38,6 +39,42 @@ class NoteImageStore(private val context: Context) {
 
         private val ALLOWED_EXTENSIONS =
             setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
+    }
+
+    // ===== 内存缓存 =====
+    //
+    // 为什么必须有：loadBitmap 的调用方（首页卡片缩略图、编辑器图片块）都跑在
+    // 可重组/可回收的 UI 环境里。没有缓存时，LazyColumn 每次把滑出屏幕的条目
+    // 重新回收再进入，都会触发一次「读文件 + 解码 JPEG」，主线程卡顿与
+    // 快速滚动时的 IO 风暴都来自这里。
+    //
+    // 键设计：fileName + maxDimension。同一文件可能以两种尺寸被请求
+    // （编辑器用 DEFAULT_MAX_DIMENSION，首页缩略图用更小值），
+    // 若只按 fileName 缓存，小图会顶掉大图导致编辑页模糊。
+    //
+    // 容量：maxMemory 的 1/8。sizeOf 用 Bitmap 的字节量（allocationByteCount），
+    // 与 maxSize 的 KB 单位一致——LruCache 约定 sizeOf 返回值与 maxSize 同单位。
+    private val bitmapCache = object : LruCache<String, Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(4 * 1024)
+    ) {
+        override fun sizeOf(key: String, value: Bitmap): Int =
+            (value.allocationByteCount / 1024).coerceAtLeast(1)
+    }
+
+    private fun cacheKey(fileName: String, maxDimension: Int) = "$fileName@$maxDimension"
+
+    /** 丢弃指定文件的全部缓存位图。删除图片文件后必须调用，避免展示已删除的图。 */
+    fun evict(fileName: String) {
+        synchronized(bitmapCache) {
+            // 键形如 "name@dim"，前缀匹配即可覆盖该文件的所有尺寸
+            val keys = bitmapCache.snapshot().keys.filter { it.substringBeforeLast('@') == fileName }
+            keys.forEach { bitmapCache.remove(it) }
+        }
+    }
+
+    /** 清空全部位图缓存（低内存回调或测试用）。 */
+    fun clearMemoryCache() {
+        bitmapCache.evictAll()
     }
 
     fun imageDir(): File {
@@ -102,14 +139,26 @@ class NoteImageStore(private val context: Context) {
     suspend fun loadBitmap(
         fileName: String,
         maxDimension: Int = DEFAULT_MAX_DIMENSION
-    ): Bitmap? = withContext(Dispatchers.IO) {
-        val file = fileFor(fileName) ?: return@withContext null
-        if (!file.exists()) return@withContext null
-        runCatching { decodeDownsampled(file, maxDimension) }.getOrNull()
+    ): Bitmap? {
+        val key = cacheKey(fileName, maxDimension)
+        // 命中缓存直接返回：绝大多数重组/滚动场景都会走到这里，零 IO
+        bitmapCache.get(key)?.let { return it }
+
+        return withContext(Dispatchers.IO) {
+            val file = fileFor(fileName) ?: return@withContext null
+            if (!file.exists()) return@withContext null
+            val decoded = runCatching { decodeDownsampled(file, maxDimension) }.getOrNull()
+                ?: return@withContext null
+            bitmapCache.put(key, decoded)
+            decoded
+        }
     }
 
     fun delete(fileName: String) {
         fileFor(fileName)?.delete()
+        // 文件没了缓存里的位图就成了「幽灵图」：即使文件已删除，
+        // 列表仍可能短暂显示旧图。删除文件的同时必须清缓存。
+        evict(fileName)
     }
 
     /**

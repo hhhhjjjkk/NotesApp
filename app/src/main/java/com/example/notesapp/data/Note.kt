@@ -1,9 +1,22 @@
 package com.example.notesapp.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "notes")
+@Entity(
+    tableName = "notes",
+    // 索引服务于 NoteDao 的两类高频查询：
+    // 1. 首页列表：WHERE isTrashed=0 AND type=? ORDER BY isPinned DESC, updatedAt DESC
+    //    —— 复合索引 (isTrashed, type, isPinned, updatedAt) 让过滤 + 排序全走索引，
+    //       避免「先全表扫、再在内存排序」。
+    // 2. 回收站：WHERE isTrashed=1 ORDER BY trashedAt DESC —— 前缀列复用 isTrashed。
+    // 列顺序原则：等值过滤列在前（isTrashed、type），排序列在后（isPinned、updatedAt）。
+    indices = [
+        Index(value = ["isTrashed", "type", "isPinned", "updatedAt"]),
+        Index(value = ["isTrashed", "trashedAt"])
+    ]
+)
 data class Note(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
