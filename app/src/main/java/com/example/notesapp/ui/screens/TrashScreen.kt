@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.example.notesapp.R
 import com.example.notesapp.data.Note
 import com.example.notesapp.data.ThemeMode
-import com.example.notesapp.ui.theme.liquidGlassSurface
+import com.example.notesapp.ui.screens.trash.TrashItem
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -185,119 +185,4 @@ fun TrashScreen(
             }
         )
     }
-}
-
-@Composable
-private fun TrashItem(
-    note: Note,
-    isDark: Boolean,
-    onRestore: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val shape = RoundedCornerShape(16.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .liquidGlassSurface(shape = shape, isDark = isDark, borderWidth = 1.dp)
-            .padding(14.dp)
-    ) {
-        Column {
-            if (note.title.isNotBlank()) {
-                Text(
-                    text = note.title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (note.content.isNotBlank()) {
-                Text(
-                    text = note.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = if (note.title.isNotBlank()) 4.dp else 0.dp)
-                )
-            }
-            Text(
-                text = formatTrashedDate(note.trashedAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 恢复
-                Row(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickableNoRipple(onRestore)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Restore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.trash_restore),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 6.dp)
-                    )
-                }
-                // 永久删除
-                Row(
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .clip(CircleShape)
-                        .clickableNoRipple(onDelete)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteForever,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.trash_delete),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 6.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier {
-    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    return this.then(
-        Modifier.clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = onClick
-        )
-    )
-}
-
-private fun formatTrashedDate(timestamp: Long): String {
-    if (timestamp <= 0L) return ""
-    val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
 }
