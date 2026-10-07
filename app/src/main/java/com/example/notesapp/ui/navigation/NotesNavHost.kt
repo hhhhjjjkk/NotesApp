@@ -5,8 +5,10 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -16,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.Lifecycle
@@ -55,6 +58,8 @@ fun NotesNavHost(
     val duration = animDuration(animSpeed)
     // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
+    // 打开笔记时从屏幕中央的窄条展开，整体比普通页面切换更舒缓。
+    val editorExpandDuration = (duration * 2).coerceIn(500, 900)
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
@@ -98,6 +103,20 @@ fun NotesNavHost(
     }
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
+    }
+    val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        expandVertically(
+            animationSpec = tween(editorExpandDuration, easing = sharedEasing),
+            expandFrom = Alignment.CenterVertically,
+            initialHeight = { fullHeight -> (fullHeight * 0.06f).toInt() }
+        ) + fadeIn(tween(editorExpandDuration, easing = sharedEasing))
+    }
+    val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        shrinkVertically(
+            animationSpec = tween(editorExpandDuration, easing = sharedEasing),
+            shrinkTowards = Alignment.CenterVertically,
+            targetHeight = { fullHeight -> (fullHeight * 0.06f).toInt() }
+        ) + fadeOut(tween(editorExpandDuration, easing = sharedEasing))
     }
 
     NavHost(
@@ -149,10 +168,10 @@ fun NotesNavHost(
         composable(
             route = Screen.Editor.route,
             arguments = listOf(navArgument("noteId") { type = NavType.LongType }),
-            enterTransition = secondaryEnter,
+            enterTransition = editorEnter,
             exitTransition = secondaryExit,
             popEnterTransition = secondaryPopEnter,
-            popExitTransition = secondaryPopExit
+            popExitTransition = editorPopExit
         ) { backStackEntry ->
             val noteId = backStackEntry.arguments?.getLong("noteId") ?: 0L
             EditorScreen(
