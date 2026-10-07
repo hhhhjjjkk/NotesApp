@@ -95,7 +95,6 @@ fun HomeBottomBar(
                 onSelected = onNoteTypeChange,
                 leftLabel = stringResource(com.example.notesapp.R.string.tab_note),
                 rightLabel = stringResource(com.example.notesapp.R.string.tab_todo),
-                isDark = isDark,
                 modifier = Modifier.weight(1f)
             )
             val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.92f)
