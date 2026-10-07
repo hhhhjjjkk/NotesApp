@@ -12,7 +12,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -58,9 +57,7 @@ fun SearchBar(
             )
         },
         singleLine = true,
-        // 形状由上面的 liquidGlassSurface 统一裁剪（已 clip 到 28dp 圆角），
-        // 这里用 RectangleShape 避免两套圆角互相削角、边缘出现毛刺。
-        shape = RectangleShape,
+        shape = RoundedCornerShape(28.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = if (isDark) GlassDarkSurface else GlassLightSurface,
             unfocusedContainerColor = if (isDark) GlassDarkSurface else GlassLightSurface,

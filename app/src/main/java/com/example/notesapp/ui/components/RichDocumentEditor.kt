@@ -39,9 +39,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -61,11 +60,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.example.notesapp.R
 import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.storage.NoteImageStore
-import kotlinx.coroutines.delay
 
 /**
  * [DocumentBlock] 列表的 rememberSaveable 保存器。
@@ -96,6 +96,7 @@ sealed interface NoteImageState {
  *
  * @param onAddTextAfterImage 在指定图片块之后插入文字块（由调用方负责生成 id 并聚焦）
  * @param focusBlockId 需要自动聚焦的文字块 id
+ * @param onBlankAreaClick 点击正文空白处时准备并聚焦一个文字块
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -111,9 +112,13 @@ fun RichDocumentEditor(
     hintText: String,
     focusBlockId: String? = null,
     focusRequester: FocusRequester? = null,
+    onBlankAreaClick: () -> Unit = {},
     accentColor: Color = MaterialTheme.colorScheme.primary
 ) {
     val density = LocalDensity.current
+    val editorFocusRequester = focusRequester ?: remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    var focusRequestKey by remember { mutableStateOf(0) }
 
     // blocks 是组合期的快照参数。所有写处理器都通过它派生新列表，
     // 若同一帧内发生两次写（例如一边打字一边拖拽图片，多指或桌面模式），
@@ -127,18 +132,27 @@ fun RichDocumentEditor(
         val availableWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
 
         // 新插入或首次进入时自动聚焦目标文字块。
-        // 这里延迟一帧，确保 focusRequester 已经挂到该块上。
-        LaunchedEffect(focusBlockId) {
-            if (focusBlockId != null && focusRequester != null) {
-                delay(60)
-                runCatching { focusRequester.requestFocus() }
+        LaunchedEffect(focusBlockId, focusRequestKey) {
+            if (focusBlockId != null) {
+                val targetIndex = blocks.indexOfFirst { it.id == focusBlockId }
+                if (targetIndex >= 0) {
+                    listState.scrollToItem(targetIndex)
+                    withFrameNanos { }
+                    editorFocusRequester.requestFocus()
+                }
             }
         }
 
         // LazyColumn：只有进入可视区域的块才参与组合与位图解码，
         // 图片很多时不会再把全部 Bitmap 同时驻留内存（此前是普通 Column，有 OOM 风险）。
         LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable {
+                    onBlankAreaClick()
+                    focusRequestKey++
+                },
             // 底部留出空间，避免最后一块内容被编辑页的浮动颜色条遮挡
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
@@ -148,20 +162,18 @@ fun RichDocumentEditor(
                 when (block) {
                     is DocumentBlock.Text -> {
                         val textFieldFocusRequester = remember { FocusRequester() }
-                        // 整行（含上下 padding）可点击聚焦，解决「点击空白区域无反应」问题
+                        val blockFocusRequester = if (block.id == focusBlockId) {
+                            editorFocusRequester
+                        } else {
+                            textFieldFocusRequester
+                        }
+                        // 整行（含上下 padding）可点击聚焦。
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
-                                .then(
-                                    if (block.id == focusBlockId && focusRequester != null) {
-                                        Modifier.focusRequester(focusRequester)
-                                    } else {
-                                        Modifier
-                                    }
-                                )
                                 .combinedClickable(
-                                    onClick = { textFieldFocusRequester.requestFocus() },
+                                    onClick = { blockFocusRequester.requestFocus() },
                                     onLongClick = {}
                                 )
                         ) {
@@ -175,7 +187,9 @@ fun RichDocumentEditor(
                                         }
                                     )
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(blockFocusRequester),
                                 textStyle = TextStyle(
                                     fontSize = 16.sp,
                                     lineHeight = 24.sp,
