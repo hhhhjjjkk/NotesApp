@@ -56,7 +56,6 @@ import com.example.notesapp.ui.theme.MarkdownBlock
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.parseMarkdown
 import com.example.notesapp.ui.theme.rememberPressableGlassScale
-import com.example.notesapp.ui.theme.toGlassSurface
 import com.example.notesapp.ui.theme.toNoteColor
 import androidx.compose.foundation.shape.RoundedCornerShape
 import java.text.SimpleDateFormat
@@ -92,20 +91,15 @@ fun NoteCard(
     }
 
     val baseColor = note.color.toNoteColor(isDark)
-    // 玻璃底色：默认就带一定半透明（否则玻璃高光与壁纸都透不出来，玻璃感无从谈起）。
-    // 用户设置的 transparency 在此基础上**继续**降低 alpha，两者叠加而不是互相覆盖，
-    // 这样「玻璃默认观感」与「用户想要更透」两个诉求都能满足。
-    // 上限 0.85 保证内容始终可读（低于此值时文字对比度会明显不足）。
-    val glassBase = baseColor.toGlassSurface(isDark)
-    val cardColor = if (transparency > 0f) {
-        glassBase.copy(alpha = (glassBase.alpha - transparency * 0.6f).coerceIn(0.15f, 1f))
-    } else {
-        glassBase
-    }
-    val contentColor = if (cardColor.isDark()) {
+    val contentColor = if (baseColor.isDark()) {
         Color.White
     } else {
         MaterialTheme.colorScheme.onSurface
+    }
+    val cardBorderColor = if (isDark) {
+        Color.White.copy(alpha = 0.14f * (1f - transparency.coerceIn(0f, 1f)))
+    } else {
+        Color.Black.copy(alpha = 0.07f * (1f - transparency.coerceIn(0f, 1f)))
     }
 
     val shape = RoundedCornerShape(radiusDp.dp)
@@ -178,7 +172,13 @@ fun NoteCard(
                     elevation = if (shadowEnabled) 2.dp else 0.dp,
                     shape = shape
                 )
-                .liquidGlassSurface(shape = shape, isDark = isDark, tint = cardColor)
+                .liquidGlassSurface(
+                    shape = shape,
+                    isDark = isDark,
+                    borderWidth = 0.dp,
+                    highlight = 0f
+                )
+                .border(1.dp, cardBorderColor, shape)
                 .then(
                     if (isSelected) {
                         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
