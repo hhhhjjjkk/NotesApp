@@ -12,12 +12,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.NotesApplication
 import com.example.notesapp.R
+import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.ui.components.RichDocumentEditor
 import com.example.notesapp.ui.screens.editor.EditorBottomBar
@@ -54,6 +56,7 @@ fun EditorScreen(
     onBack: () -> Unit
 ) {
     val state = rememberEditorState()
+    val bodyFocusRequester = remember { FocusRequester() }
     val context = LocalContext.current
     val imageStore = remember(context) {
         (context.applicationContext as NotesApplication).imageStore
@@ -160,6 +163,14 @@ fun EditorScreen(
                     imageStore = imageStore,
                     onAddTextAfterImage = { imageId -> imagePicker.insertTextAfterImage(imageId) },
                     onInsertImageBefore = { imageId -> imagePicker.insertBefore(imageLauncher, imageId) },
+                    onBlankAreaClick = {
+                        val lastTextBlock = state.blocks.lastOrNull() as? DocumentBlock.Text
+                        val targetBlock = lastTextBlock ?: DocumentBlock.text("")
+                        if (lastTextBlock == null) {
+                            state.blocks = state.blocks + targetBlock
+                        }
+                        state.focusBlockId = targetBlock.id
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
@@ -167,7 +178,7 @@ fun EditorScreen(
                     cursorColor = MaterialTheme.colorScheme.primary,
                     hintText = stringResource(R.string.content_hint),
                     focusBlockId = state.focusBlockId,
-                    focusRequester = null
+                    focusRequester = bodyFocusRequester
                 )
             }
 

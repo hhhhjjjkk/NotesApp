@@ -1,6 +1,5 @@
 package com.example.notesapp.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -21,8 +20,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.Circle
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -166,7 +164,7 @@ fun NoteCard(
             }
         }
     ) {
-        Card(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(scaleModifier)
@@ -176,22 +174,19 @@ fun NoteCard(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                // 玻璃表面：由 tint 画半透明底色，再叠顶部高光与发丝描边。
-                // 底色交给这里而不是 Card 的 containerColor，是因为 Card 会在内容层
-                // 内部先画自己的背景，会把高光盖住；详见 liquidGlassSurface 的绘制顺序说明。
-                .liquidGlassSurface(shape = shape, isDark = isDark, tint = cardColor),
-            // containerColor 必须透明：底色（cardColor）已作为 tint 交给玻璃层绘制，
-            // 两边都画会叠成双倍不透明度，玻璃就变成了不透明色块。
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-            shape = shape,
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = if (shadowEnabled) 2.dp else 0.dp
-            ),
-            // 只用边框表达「选中」这一种强状态；未选中时的轮廓交给玻璃的发丝描边，
-            // 避免玻璃描边与 Card 边框叠成两层、线条变粗发脏。
-            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                .shadow(
+                    elevation = if (shadowEnabled) 2.dp else 0.dp,
+                    shape = shape
+                )
+                .liquidGlassSurface(shape = shape, isDark = isDark, tint = cardColor)
+                .then(
+                    if (isSelected) {
+                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+                    } else {
+                        Modifier
+                    }
+                )
         ) {
-        Box {
             Row(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f).padding(16.dp)) {
                     if (note.title.isNotBlank()) {
@@ -256,7 +251,6 @@ fun NoteCard(
                         .size(24.dp)
                 )
             }
-        }
         }
     }
 }
