@@ -5,10 +5,10 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.expandIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.shrinkOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -58,7 +59,7 @@ fun NotesNavHost(
     val duration = animDuration(animSpeed)
     // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
-    // 打开笔记时从屏幕中央的窄条展开，整体比普通页面切换更舒缓。
+    // 打开笔记时从接近卡片比例的中央区域扩展至全屏。
     val editorExpandDuration = (duration * 2).coerceIn(500, 900)
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
@@ -105,17 +106,27 @@ fun NotesNavHost(
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        expandVertically(
+        expandIn(
             animationSpec = tween(editorExpandDuration, easing = sharedEasing),
-            expandFrom = Alignment.CenterVertically,
-            initialHeight = { fullHeight -> (fullHeight * 0.06f).toInt() }
+            expandFrom = Alignment.Center,
+            initialSize = { fullSize ->
+                IntSize(
+                    width = (fullSize.width * 0.94f).toInt(),
+                    height = (fullSize.height * 0.16f).toInt()
+                )
+            }
         ) + fadeIn(tween(editorExpandDuration, easing = sharedEasing))
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        shrinkVertically(
+        shrinkOut(
             animationSpec = tween(editorExpandDuration, easing = sharedEasing),
-            shrinkTowards = Alignment.CenterVertically,
-            targetHeight = { fullHeight -> (fullHeight * 0.06f).toInt() }
+            shrinkTowards = Alignment.Center,
+            targetSize = { fullSize ->
+                IntSize(
+                    width = (fullSize.width * 0.94f).toInt(),
+                    height = (fullSize.height * 0.16f).toInt()
+                )
+            }
         ) + fadeOut(tween(editorExpandDuration, easing = sharedEasing))
     }
 
