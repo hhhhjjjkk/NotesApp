@@ -3,12 +3,13 @@ package com.example.notesapp.ui.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -18,10 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -45,6 +45,7 @@ private fun animDuration(animSpeed: Float): Int =
 
 // 统一使用对称缓动曲线（先加速后减速），进入和退出速度感受完全一致
 private val sharedEasing = FastOutSlowInEasing
+private val editorExpandEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 @Composable
 fun NotesNavHost(
@@ -59,8 +60,9 @@ fun NotesNavHost(
     val duration = animDuration(animSpeed)
     // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
-    // 打开笔记时从接近卡片比例的中央区域扩展至全屏。
-    val editorExpandDuration = (duration * 2).coerceIn(500, 900)
+    // 使用图层缩放而不是尺寸重测，避免展开时反复重新布局编辑器。
+    val editorExpandDuration = (duration + 180).coerceIn(420, 650)
+    val editorFadeDuration = 180
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
@@ -106,28 +108,18 @@ fun NotesNavHost(
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        expandIn(
-            animationSpec = tween(editorExpandDuration, easing = sharedEasing),
-            expandFrom = Alignment.Center,
-            initialSize = { fullSize ->
-                IntSize(
-                    width = (fullSize.width * 0.94f).toInt(),
-                    height = (fullSize.height * 0.16f).toInt()
-                )
-            }
-        ) + fadeIn(tween(editorExpandDuration, easing = sharedEasing))
+        scaleIn(
+            animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
+            initialScale = 0.82f,
+            transformOrigin = TransformOrigin.Center
+        ) + fadeIn(tween(editorFadeDuration, easing = editorExpandEasing))
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        shrinkOut(
-            animationSpec = tween(editorExpandDuration, easing = sharedEasing),
-            shrinkTowards = Alignment.Center,
-            targetSize = { fullSize ->
-                IntSize(
-                    width = (fullSize.width * 0.94f).toInt(),
-                    height = (fullSize.height * 0.16f).toInt()
-                )
-            }
-        ) + fadeOut(tween(editorExpandDuration, easing = sharedEasing))
+        scaleOut(
+            animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
+            targetScale = 0.82f,
+            transformOrigin = TransformOrigin.Center
+        ) + fadeOut(tween(editorFadeDuration, easing = editorExpandEasing))
     }
 
     NavHost(
