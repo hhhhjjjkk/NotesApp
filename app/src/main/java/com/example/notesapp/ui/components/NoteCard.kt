@@ -56,7 +56,6 @@ import com.example.notesapp.ui.theme.MarkdownBlock
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.parseMarkdown
 import com.example.notesapp.ui.theme.rememberPressableGlassScale
-import com.example.notesapp.ui.theme.toGlassSurface
 import com.example.notesapp.ui.theme.toNoteColor
 import androidx.compose.foundation.shape.RoundedCornerShape
 import java.text.SimpleDateFormat
@@ -102,10 +101,6 @@ fun NoteCard(
     } else {
         Color.Black.copy(alpha = 0.07f * (1f - transparency.coerceIn(0f, 1f)))
     }
-    val cardSurface = baseColor.toGlassSurface(isDark).let {
-        it.copy(alpha = it.alpha * (1f - transparency.coerceIn(0f, 1f)))
-    }
-
     val shape = RoundedCornerShape(radiusDp.dp)
     val (scaleModifier, interactionSource) = rememberPressableGlassScale(pressedScale = 0.97f)
 
@@ -179,7 +174,6 @@ fun NoteCard(
                 .liquidGlassSurface(
                     shape = shape,
                     isDark = isDark,
-                    tint = cardSurface,
                     borderWidth = 0.dp,
                     highlight = 0f
                 )
