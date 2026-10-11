@@ -36,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -95,11 +94,6 @@ fun NoteCard(
         Color.White
     } else {
         MaterialTheme.colorScheme.onSurface
-    }
-    val cardBorderColor = if (isDark) {
-        Color.White.copy(alpha = 0.14f * (1f - transparency.coerceIn(0f, 1f)))
-    } else {
-        Color.Black.copy(alpha = 0.07f * (1f - transparency.coerceIn(0f, 1f)))
     }
     val shape = RoundedCornerShape(radiusDp.dp)
     val (scaleModifier, interactionSource) = rememberPressableGlassScale(pressedScale = 0.97f)
@@ -167,17 +161,12 @@ fun NoteCard(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                .shadow(
-                    elevation = if (shadowEnabled) 2.dp else 0.dp,
-                    shape = shape
-                )
                 .liquidGlassSurface(
                     shape = shape,
                     isDark = isDark,
                     borderWidth = 0.dp,
                     highlight = 0f
                 )
-                .border(1.dp, cardBorderColor, shape)
                 .then(
                     if (isSelected) {
                         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)

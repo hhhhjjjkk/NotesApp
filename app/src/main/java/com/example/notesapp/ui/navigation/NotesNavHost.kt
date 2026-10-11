@@ -110,15 +110,15 @@ fun NotesNavHost(
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         scaleIn(
             animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            initialScale = 0.82f,
-            transformOrigin = TransformOrigin.Center
+            initialScale = 0.8f,
+            transformOrigin = TransformOrigin(0f, 0f)
         ) + fadeIn(tween(editorFadeDuration, easing = editorExpandEasing))
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         scaleOut(
             animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            targetScale = 0.82f,
-            transformOrigin = TransformOrigin.Center
+            targetScale = 0.8f,
+            transformOrigin = TransformOrigin(0f, 0f)
         ) + fadeOut(tween(editorFadeDuration, easing = editorExpandEasing))
     }
 
