@@ -61,7 +61,8 @@ fun NotesNavHost(
     // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
     // 使用图层缩放而不是尺寸重测，避免展开时反复重新布局编辑器。
-    val editorExpandDuration = (duration + 180).coerceIn(420, 650)
+    // 展开比普通翻页略长，突出"慢慢铺满全屏"的绽放感
+    val editorExpandDuration = (duration + 220).coerceIn(450, 700)
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
@@ -106,21 +107,22 @@ fun NotesNavHost(
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
-    // 编辑页：从屏幕中心平滑展开铺满全屏（不再从左上角飞出），对称收束返回
-    // 只用 scale、不叠 fade：全程一条曲线走到底，消除中途透明度突变造成的割裂感
+    // 编辑页：从屏幕中心绽放式慢慢铺满全屏。scale 与 fade 共用同一时长、同一曲线，
+    // 全程只有一个运动节奏：进入渐显放大，返回渐隐收束——结束时透明度恰好归零，
+    // 不会出现"画面还很大却瞬间消失"的残影。
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         scaleIn(
             animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            initialScale = 0.85f,
+            initialScale = 0.6f,
             transformOrigin = TransformOrigin.Center
-        )
+        ) + fadeIn(tween(editorExpandDuration, easing = editorExpandEasing))
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         scaleOut(
             animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            targetScale = 0.85f,
+            targetScale = 0.6f,
             transformOrigin = TransformOrigin.Center
-        )
+        ) + fadeOut(tween(editorExpandDuration, easing = editorExpandEasing))
     }
 
     NavHost(
