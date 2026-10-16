@@ -6,10 +6,10 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -19,9 +19,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -107,21 +108,23 @@ fun NotesNavHost(
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
-    // 编辑页：从屏幕中心绽放式慢慢铺满全屏。scale 与 fade 共用同一时长、同一曲线，
-    // 全程只有一个运动节奏：进入渐显放大，返回渐隐收束——结束时透明度恰好归零，
-    // 不会出现"画面还很大却瞬间消失"的残影。
+    // 编辑页：慢慢铺满全屏。用 clip=true 的 expand/shrink 代替缩放图层：
+    // 进入时从中心向四周铺开并裁剪，返回时沿原路收拢，全程无叠加逐出/瞬间移除，
+    // 因此不会产生残影。
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        scaleIn(
+        expandIn(
             animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            initialScale = 0.6f,
-            transformOrigin = TransformOrigin.Center
+            expandFrom = Alignment.Center,
+            initialSize = { fullSize -> IntSize((fullSize.width * 0.6f).toInt(), (fullSize.height * 0.6f).toInt()) },
+            clip = true
         ) + fadeIn(tween(editorExpandDuration, easing = editorExpandEasing))
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        scaleOut(
+        shrinkOut(
             animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            targetScale = 0.6f,
-            transformOrigin = TransformOrigin.Center
+            shrinkTowards = Alignment.Center,
+            targetSize = { fullSize -> IntSize((fullSize.width * 0.6f).toInt(), (fullSize.height * 0.6f).toInt()) },
+            clip = true
         ) + fadeOut(tween(editorExpandDuration, easing = editorExpandEasing))
     }
 
