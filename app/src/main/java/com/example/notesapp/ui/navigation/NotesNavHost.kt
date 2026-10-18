@@ -6,10 +6,10 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -19,10 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -61,9 +60,12 @@ fun NotesNavHost(
     val duration = animDuration(animSpeed)
     // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
-    // 使用图层缩放而不是尺寸重测，避免展开时反复重新布局编辑器。
-    // 展开比普通翻页略长，突出"慢慢铺满全屏"的绽放感
-    val editorExpandDuration = (duration + 220).coerceIn(450, 700)
+    // 与视频实测对齐：整个开合约 460~540ms，动作柔和、无弹出感
+    val editorExpandDuration = (duration + 200).coerceIn(460, 540)
+    // 首页在编辑页下方时的轻缩放幅度（复刻视频里旧页轻微缩落的观感）
+    val homeShrinkScale = 0.97f
+    // 编辑页淡入淡出的起始缩放：以淡化为主，略带"慢慢铺满"的落位感
+    val editorScale = 0.88f
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
@@ -79,15 +81,32 @@ fun NotesNavHost(
     val exitSlideSpec = { tween<IntOffset>(duration, easing = sharedEasing) }
     val exitFadeSpec = { tween<Float>(fadeDuration, easing = sharedEasing) }
 
-    // 首页：不移动，被覆盖 / 被揭开，避免割裂感
+    // 首页：默认不动，避免割裂感；只有进出编辑页时才做轻微缩落/淡出，
+    // 复刻参考视频里"旧页面轻轻缩一点再淡出"的观感。
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         fadeIn(tween(duration, easing = sharedEasing))
     }
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        ExitTransition.None
+        if (targetState.destination.route == Screen.Editor.route) {
+            scaleOut(
+                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
+                targetScale = homeShrinkScale,
+                transformOrigin = TransformOrigin.Center
+            ) + fadeOut(tween(editorExpandDuration, easing = editorExpandEasing))
+        } else {
+            ExitTransition.None
+        }
     }
     val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        EnterTransition.None
+        if (initialState.destination.route == Screen.Editor.route) {
+            scaleIn(
+                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
+                initialScale = homeShrinkScale,
+                transformOrigin = TransformOrigin.Center
+            ) + fadeIn(tween(editorExpandDuration, easing = editorExpandEasing))
+        } else {
+            EnterTransition.None
+        }
     }
     val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         ExitTransition.None
@@ -108,24 +127,24 @@ fun NotesNavHost(
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
-    // 编辑页：慢慢铺满全屏。用 clip=true 的 expand/shrink 代替缩放图层：
-    // 进入时从中心向四周铺开并裁剪，返回时沿原路收拢，全程无叠加逐出/瞬间移除，
-    // 因此不会产生残影。
+    // 编辑页：以淡化为主 + 轻微缩落位（对齐参考视频的手感）。
+    // scale 与 fade 共用同一时长、同一曲线，结束时透明度恰好归零，
+    // 不会有"画面还很大却瞬间消失"的残影。
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        expandIn(
-            animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            expandFrom = Alignment.Center,
-            initialSize = { fullSize -> IntSize((fullSize.width * 0.6f).toInt(), (fullSize.height * 0.6f).toInt()) },
-            clip = true
-        ) + fadeIn(tween(editorExpandDuration, easing = editorExpandEasing))
+        fadeIn(tween(editorExpandDuration, easing = editorExpandEasing)) +
+            scaleIn(
+                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
+                initialScale = editorScale,
+                transformOrigin = TransformOrigin.Center
+            )
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        shrinkOut(
-            animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-            shrinkTowards = Alignment.Center,
-            targetSize = { fullSize -> IntSize((fullSize.width * 0.6f).toInt(), (fullSize.height * 0.6f).toInt()) },
-            clip = true
-        ) + fadeOut(tween(editorExpandDuration, easing = editorExpandEasing))
+        fadeOut(tween(editorExpandDuration, easing = editorExpandEasing)) +
+            scaleOut(
+                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
+                targetScale = editorScale,
+                transformOrigin = TransformOrigin.Center
+            )
     }
 
     NavHost(
