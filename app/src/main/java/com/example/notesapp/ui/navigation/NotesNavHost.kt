@@ -62,8 +62,6 @@ fun NotesNavHost(
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
     // 与视频实测对齐：整个开合约 460~540ms，动作柔和、无弹出感
     val editorExpandDuration = (duration + 200).coerceIn(460, 540)
-    // 首页在编辑页下方时的轻缩放幅度（复刻视频里旧页轻微缩落的观感）
-    val homeShrinkScale = 0.97f
     // 编辑页淡入淡出的起始缩放：以淡化为主，略带"慢慢铺满"的落位感
     val editorScale = 0.88f
 
@@ -81,32 +79,22 @@ fun NotesNavHost(
     val exitSlideSpec = { tween<IntOffset>(duration, easing = sharedEasing) }
     val exitFadeSpec = { tween<Float>(fadeDuration, easing = sharedEasing) }
 
-    // 首页：默认不动，避免割裂感；只有进出编辑页时才做轻微缩落/淡出，
-    // 复刻参考视频里"旧页面轻轻缩一点再淡出"的观感。
+    // 首页：保持「不移动、被覆盖 / 被揭开」——不要把首页整体卷进缩放/淡出过渡。
+    // ⚠️ 踩坑记录（勿删）：v3.7.0 曾给首页加 scaleIn/scaleOut 做"旧页轻缩"，随后用户
+    // 反馈"从编辑页返回时底部滑块的上浮动画一直向上飞、落不到位"。把首页侧恢复为
+    // None（即 v3.6.9 已确认正常的配置）后即修复。
+    // 具体机制属「版本相关、尚未真机验证」：首页整体缩放会与底栏 350ms 的
+    // slideInVertically(initialOffsetY = { it }) 在父级变换未收敛时争夺落点；
+    // 另有 LifecycleRegistry.addObserver 对已 RESUMED 的 entry 补发 ON_RESUME 的路径，
+    // 会让 homeResumeCount 额外自增一次。两条都需要真机 log 才能定论，故不写死是其一。
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         fadeIn(tween(duration, easing = sharedEasing))
     }
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (targetState.destination.route == Screen.Editor.route) {
-            scaleOut(
-                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-                targetScale = homeShrinkScale,
-                transformOrigin = TransformOrigin.Center
-            ) + fadeOut(tween(editorExpandDuration, easing = editorExpandEasing))
-        } else {
-            ExitTransition.None
-        }
+        ExitTransition.None
     }
     val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        if (initialState.destination.route == Screen.Editor.route) {
-            scaleIn(
-                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-                initialScale = homeShrinkScale,
-                transformOrigin = TransformOrigin.Center
-            ) + fadeIn(tween(editorExpandDuration, easing = editorExpandEasing))
-        } else {
-            EnterTransition.None
-        }
+        EnterTransition.None
     }
     val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         ExitTransition.None
@@ -162,6 +150,13 @@ fun NotesNavHost(
             // 每当首页重新回到 RESUMED（冷启动、或从编辑/设置/回收站返回）就自增，
             // 作为 replayKey 通知 HomeScreen 重播底部滑块的上浮动画。
             // 之所以不用 entry.id：它在同一次返回栈条目中恒定不变，无法反映"回来了"。
+            // ⚠️ 不要给首页整体加 scale/fade 过渡（勿删）：v3.7.0 加过，用户反馈从编辑页
+            // 返回时底栏上浮动画「一直向上飞、落不到位」，恢复 None 后即修复。
+            // 机制属「版本相关、待真机验证」：首页整体缩放会让父渲染层在 pop 期间处于
+            // 未收敛状态，底栏 350ms slideInVertically(initialOffsetY = { it }) 的落点被
+            // 父级变换持续重映射；同时本 observer 每次重新注册时，LifecycleRegistry 会对
+            // 已 RESUMED 的 entry 补发一次 ON_RESUME，使 homeResumeCount 额外自增一次。
+            // 两者都不足以单独解释"反复飞"，故未写死结论。
             var homeResumeCount by remember(homeEntry) { mutableIntStateOf(0) }
             val lifecycleOwner = LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
