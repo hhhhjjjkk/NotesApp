@@ -1,11 +1,12 @@
 package com.example.notesapp.ui.screens.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,32 +23,46 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.R
 import com.example.notesapp.ui.components.LiquidSegmentedSlider
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.rememberPressableGlassScale
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /**
  * 底部栏：「备忘录/代办」切换滑块 + 新建按钮。
  *
- * ## 为什么必须「主动重播」入场动画（踩坑记录，勿删）
- * Compose Navigation 用 getVisibleEntries() 驱动 AnimatedContent，
- * 且内容由 SaveableStateHolder/LocalOwnersProvider 承载，因此从二级页返回时
- * HomeScreen 的 composition 是「被保留」的，remember 值不会重置，
- * visible = !selectionMode 也自始至终没有变化 —— 所以 AnimatedVisibility
- * 不会播放 enter 动画（它只响应变化，不响应初始值）。
+ * ## 入场动画为什么是「内容层一次性上浮」，而不是翻转 AnimatedVisibility（踩坑记录，勿删）
+ * Compose Navigation 从二级页返回时 HomeScreen 的 composition 是「被保留」的，
+ * AnimatedVisibility 不会自动重播 enter（它只响应变化，不响应初始值）。
  *
- * 因此必须主动重播：以 replayKey 标记每一次重新回到首页，
- * 当其变化时先把状态压回 false（无动画地回到起点），再推入 true，
- * 人为制造一次真实的 false -> true 变化，从而触发上浮入场动画。
- * 单一 effect 同时负责「回到首页重播」与「多选模式跟随」，
- * 拆成两个 effect 会在首次组合时互相覆盖 targetState，产生竞态。
+ * 旧实现（v3.3~v3.7.1）靠 replayKey 变化把 visibleState 在 false/true 间翻转来人为重播。
+ * 该机制有两个脆弱点，且从未在真机上完整验证过：
+ * 1. 每次翻转都会先播 exit（下滑 300ms）再播 enter（上浮 350ms）；只要触发比预期多
+ *    （lifecycle 补发 ON_RESUME、effect 重启等），入场动画就被反复重启，
+ *    观感即「底栏一直向上飞、落不到位」（v3.7.0/v3.7.1 用户真机反馈）。
+ * 2. enter 的 initialOffsetY = { it } 取「内容自身高度」，转场期间父容器测量
+ *    不稳定时起点可能异常。
+ *
+ * 新机制（v3.7.2 起重修）：
+ * 1. AnimatedVisibility 只负责多选模式的显隐：enter 仅淡入，exit 保持下滑淡出；
+ * 2. 「回到首页/离开多选」的上浮改为内容层 graphicsLayer 的单次 progress 动画
+ *    （固定 200dp 距离，落点 = 布局位置，与测量无关）；
+ * 3. 重播请求合并：动画进行中的再次触发直接忽略，让当前这一次自然落位——
+ *    结构上保证「只上浮一次、必然落位」。
  */
 @Composable
 fun HomeBottomBar(
@@ -60,22 +75,29 @@ fun HomeBottomBar(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val density = LocalDensity.current
+    val floatDistancePx = with(density) { 200.dp.toPx() }
+    // 上浮进度：0 = 起始（下方 + 透明），1 = 就位。初值 0 避免首帧闪现。
+    val floatProgress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var replayJob by remember { mutableStateOf<Job?>(null) }
+
     LaunchedEffect(replayKey, selectionMode) {
-        if (!selectionMode) {
-            // 回到首页：先压回 false 并等一帧，确保 AnimatedVisibility 观察到该变化，
-            // 否则同一帧内 false -> true 会被合并，动画不会播放。
-            visibleState.targetState = false
-            withFrameNanos { }
-        }
+        // 显隐只跟随多选模式，不再为了重播而翻转（翻转正是旧机制的 bug 源头）
         visibleState.targetState = !selectionMode
+        if (selectionMode) return@LaunchedEffect
+        // 合并护栏：上浮已在飞时，新触发直接忽略——保证只上浮一次、必然落位。
+        // 用 composition 级 scope 启动，避免 effect 因 key 变化重启时把动画一起取消。
+        if (replayJob?.isActive == true) return@LaunchedEffect
+        replayJob = scope.launch {
+            floatProgress.snapTo(0f)
+            floatProgress.animateTo(1f, tween(350, easing = FastOutSlowInEasing))
+        }
     }
 
     AnimatedVisibility(
         visibleState = visibleState,
-        enter = slideInVertically(
-            animationSpec = tween(350),
-            initialOffsetY = { it }
-        ) + fadeIn(animationSpec = tween(350)),
+        enter = fadeIn(animationSpec = tween(200)),
         exit = slideOutVertically(
             animationSpec = tween(300),
             targetOffsetY = { it }
@@ -86,7 +108,11 @@ fun HomeBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .graphicsLayer {
+                    translationY = (1f - floatProgress.value) * floatDistancePx
+                    alpha = floatProgress.value
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)
         ) {
