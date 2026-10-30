@@ -123,7 +123,7 @@ fun HomeBottomBar(
                 rightLabel = stringResource(com.example.notesapp.R.string.tab_todo),
                 modifier = Modifier.weight(1f)
             )
-            val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.92f)
+            val (scaleMod, fabSrc) = rememberPressableGlassScale(pressedScale = 0.97f)
             val primary = MaterialTheme.colorScheme.primary
             Box(
                 modifier = Modifier

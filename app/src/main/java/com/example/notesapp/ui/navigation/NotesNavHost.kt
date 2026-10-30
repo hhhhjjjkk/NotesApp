@@ -87,8 +87,15 @@ fun NotesNavHost(
     // slideInVertically(initialOffsetY = { it }) 在父级变换未收敛时争夺落点；
     // 另有 LifecycleRegistry.addObserver 对已 RESUMED 的 entry 补发 ON_RESUME 的路径，
     // 会让 homeResumeCount 额外自增一次。两条都需要真机 log 才能定论，故不写死是其一。
+    // 交叉淡化时长对齐（勿删）：从编辑页返回首页时，首页淡入必须与编辑页退场
+    // （editorExpandDuration）同步；否则首页 ~300ms 就全亮、编辑页还在其上缩小
+    // 悬浮 200ms+，出现「双重影像」。从设置/回收站返回仍用普通 duration。
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(tween(duration, easing = sharedEasing))
+        if (initialState.destination.route == Screen.Editor.route) {
+            fadeIn(tween(editorExpandDuration, easing = editorExpandEasing))
+        } else {
+            fadeIn(tween(duration, easing = sharedEasing))
+        }
     }
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         ExitTransition.None

@@ -180,7 +180,9 @@ fun LiquidSegmentedSlider(
     }
 }
 
+// 无低弹跳：主要动画是文字颜色 0..1 的 lerp，低弹跳会让颜色越过终点再弹回，
+// 视觉上呈一次「呼吸」式振荡；NoBouncy 保持吸附动作与拖拽跟手，去掉颜色振荡。
 private val springSpec = spring<Float>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
+    dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessMedium
 )
