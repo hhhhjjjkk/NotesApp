@@ -115,8 +115,13 @@ fun HomeScreen(
     // 长按选中的笔记，用于底部弹窗
     var sheetNote by remember { mutableStateOf<Note?>(null) }
 
-    // 底部栏入场动画状态（重播逻辑在 HomeBottomBar 内，注释见彼处）
-    val bottomBarVisible = remember { MutableTransitionState(false) }
+    // 底部栏入场动画状态。
+    // ⚠️ 必须以 replayKey 为 key：从二级页返回首页时 composition 被保留，
+    // 若状态不重建，AnimatedVisibility 的 targetState 自始没变过 → 不会播 enter。
+    // 以 replayKey 重建后得到一个初始为 false 的 TransitionState，
+    // HomeBottomBar 再把 targetState 推为 true，形成真实的 false→true，
+    // 由 Compose 原生播放「自屏幕底边向上滑入」的入场动画（不会先播下滑的 exit）。
+    val bottomBarVisible = remember(replayKey) { MutableTransitionState(false) }
 
     fun deleteWithUndo(note: Note, message: String) {
         viewModel.deleteNote(note)

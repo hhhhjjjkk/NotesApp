@@ -17,6 +17,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -155,21 +156,34 @@ fun NotesNavHost(
             popExitTransition = homePopExit
         ) { homeEntry ->
             // 每当首页重新回到 RESUMED（冷启动、或从编辑/设置/回收站返回）就自增，
-            // 作为 replayKey 通知 HomeScreen 重播底部滑块的上浮动画。
+            // 作为 replayKey 通知 HomeScreen 重播底部栏的上浮入场动画。
             // 之所以不用 entry.id：它在同一次返回栈条目中恒定不变，无法反映"回来了"。
-            // ⚠️ 不要给首页整体加 scale/fade 过渡（勿删）：v3.7.0 加过，用户反馈从编辑页
-            // 返回时底栏上浮动画「一直向上飞、落不到位」，恢复 None 后即修复。
-            // 机制属「版本相关、待真机验证」：首页整体缩放会让父渲染层在 pop 期间处于
-            // 未收敛状态，底栏 350ms slideInVertically(initialOffsetY = { it }) 的落点被
-            // 父级变换持续重映射；同时本 observer 每次重新注册时，LifecycleRegistry 会对
-            // 已 RESUMED 的 entry 补发一次 ON_RESUME，使 homeResumeCount 额外自增一次。
-            // 两者都不足以单独解释"反复飞"，故未写死结论。
+            //
+            // ⚠️ 关键去重（v3.7.4，勿删）：LifecycleRegistry 在 addObserver 时，
+            // 若目标 lifecycle 已是 RESUMED，会**立刻补发一次 ON_RESUME**。
+            // 而本 observer 会随转场期间 LocalLifecycleOwner 变化而被反复重新注册
+            // → 一次返回会补发多次 → homeResumeCount 多跳几次 → 底栏入场动画
+            // 被连续重播多次，正是用户反馈「底栏一直向上飞、冲过屏顶」的真正成因。
+            //
+            // 解法：homeResumed 放在 composition 级 remember 里（不是 DisposableEffect
+            // 的局部变量），这样 observer 重新注册时标志位依然有效：
+            // 只有「从非 RESUMED 变为 RESUMED」才计数，补发的那次会被忽略。
             var homeResumeCount by remember(homeEntry) { mutableIntStateOf(0) }
+            var homeResumed by remember(homeEntry) { mutableStateOf(false) }
             val lifecycleOwner = LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
-                    if (event == Lifecycle.Event.ON_RESUME) {
-                        homeResumeCount++
+                    when (event) {
+                        Lifecycle.Event.ON_RESUME -> {
+                            if (!homeResumed) {
+                                homeResumed = true
+                                homeResumeCount++
+                            }
+                        }
+                        Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                            homeResumed = false
+                        }
+                        else -> Unit
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)

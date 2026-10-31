@@ -1,12 +1,12 @@
 package com.example.notesapp.ui.screens.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,46 +23,50 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.R
 import com.example.notesapp.ui.components.LiquidSegmentedSlider
 import com.example.notesapp.ui.theme.liquidGlassSurface
 import com.example.notesapp.ui.theme.rememberPressableGlassScale
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 
 /**
  * 底部栏：「备忘录/代办」切换滑块 + 新建按钮。
  *
- * ## 入场动画为什么是「内容层一次性上浮」，而不是翻转 AnimatedVisibility（踩坑记录，勿删）
+ * ## 入场动画机制（v3.7.4 重修，勿退回旧写法）
+ *
+ * ### 为什么用 Compose 原生 AnimatedVisibility，而不是手动 graphicsLayer 位移
+ * v3.7.2 曾用 `Animatable` 手动驱动 `graphicsLayer.translationY` 做「上浮」：
+ * ```
+ * floatProgress.snapTo(0f)        // ← 元凶：瞬间把底栏压到下方 200dp 并 alpha=0
+ * floatProgress.animateTo(1f)    // ← 再从屏幕深处往上冲回就位
+ * ```
+ * `snapTo(0)` 产生了一次「向下一沉 + 瞬间消失」的跳变，紧接着 `animateTo` 从
+ * 屏幕下方深处往上冲，两段运动方向相反，视觉上就是「先向下滑动、再往上冲」，
+ * 观感完全反直觉（v3.7.0/v3.7.1/v3.7.3 用户真机反复反馈「向上飞/冲过屏顶」）。
+ *
+ * 现在改为**完全交给 Compose 原生过渡**：
+ * - 动画由 AnimatedVisibility 在 false→true 时自动播放 `slideInVertically`，
+ *   位移量恒等于「内容自身高度」，终点就是布局位置，**由动画系统保证不会越界**；
+ * - 不再有任何 snapTo / 瞬移，底栏只会「从屏幕底边向上滑入就位」，方向唯一且明确。
+ *
+ * ### 如何在「从二级页返回首页」时重播入场动画
  * Compose Navigation 从二级页返回时 HomeScreen 的 composition 是「被保留」的，
- * AnimatedVisibility 不会自动重播 enter（它只响应变化，不响应初始值）。
+ * AnimatedVisibility 的 targetState 自始至终没有变化，因此不会自动播放 enter。
  *
- * 旧实现（v3.3~v3.7.1）靠 replayKey 变化把 visibleState 在 false/true 间翻转来人为重播。
- * 该机制有两个脆弱点，且从未在真机上完整验证过：
- * 1. 每次翻转都会先播 exit（下滑 300ms）再播 enter（上浮 350ms）；只要触发比预期多
- *    （lifecycle 补发 ON_RESUME、effect 重启等），入场动画就被反复重启，
- *    观感即「底栏一直向上飞、落不到位」（v3.7.0/v3.7.1 用户真机反馈）。
- * 2. enter 的 initialOffsetY = { it } 取「内容自身高度」，转场期间父容器测量
- *    不稳定时起点可能异常。
+ * 做法：HomeScreen 用 `remember(replayKey) { MutableTransitionState(false) }`——
+ * replayKey 变化时**重建**一个初始为 false 的 TransitionState，
+ * 于是形成一次真实的 false→true 变化，AnimatedVisibility 自动播放 enter。
+ * 相比旧版「把 targetState 压回 false 再推回 true」的翻转做法，本方案
+ * **不会先播一段下滑的 exit**，也就没有「向下滑」的那一下。
  *
- * 新机制（v3.7.2 起重修）：
- * 1. AnimatedVisibility 只负责多选模式的显隐：enter 仅淡入，exit 保持下滑淡出；
- * 2. 「回到首页/离开多选」的上浮改为内容层 graphicsLayer 的单次 progress 动画
- *    （固定 200dp 距离，落点 = 布局位置，与测量无关）；
- * 3. 重播请求合并：动画进行中的再次触发直接忽略，让当前这一次自然落位——
- *    结构上保证「只上浮一次、必然落位」。
+ * ⚠️ 前提：replayKey 每次返回必须**只变化一次**。ON_RESUME 观察者在转场期间
+ * 被重新注册时，LifecycleRegistry 会给已 RESUMED 的 entry 补发一次 ON_RESUME，
+ * 会让计数多跳一次 → 底栏连续重播两次（v3.7.0「一直向上飞」的真正成因）。
+ * 该去重逻辑在 NotesNavHost 的 homeResumeCount 处实现，勿删。
  */
 @Composable
 fun HomeBottomBar(
@@ -75,44 +79,31 @@ fun HomeBottomBar(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val density = LocalDensity.current
-    val floatDistancePx = with(density) { 200.dp.toPx() }
-    // 上浮进度：0 = 起始（下方 + 透明），1 = 就位。初值 0 避免首帧闪现。
-    val floatProgress = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    var replayJob by remember { mutableStateOf<Job?>(null) }
-
     LaunchedEffect(replayKey, selectionMode) {
-        // 显隐只跟随多选模式，不再为了重播而翻转（翻转正是旧机制的 bug 源头）
+        // 显隐只跟随多选模式；返回首页时的重播由 HomeScreen 重建 TransitionState
+        // 触发（见文件头注释），这里不再做「翻转」那套会播下滑 exit 的操作。
         visibleState.targetState = !selectionMode
-        if (selectionMode) return@LaunchedEffect
-        // 合并护栏：上浮已在飞时，新触发直接忽略——保证只上浮一次、必然落位。
-        // 用 composition 级 scope 启动，避免 effect 因 key 变化重启时把动画一起取消。
-        if (replayJob?.isActive == true) return@LaunchedEffect
-        replayJob = scope.launch {
-            floatProgress.snapTo(0f)
-            floatProgress.animateTo(1f, tween(350, easing = FastOutSlowInEasing))
-        }
     }
 
     AnimatedVisibility(
         visibleState = visibleState,
-        enter = fadeIn(animationSpec = tween(200)),
+        // 入场：自屏幕底边向上滑入 + 淡入。位移量 = 内容高度，终点 = 布局位置。
+        enter = slideInVertically(
+            animationSpec = tween(350, easing = FastOutSlowInEasing),
+            initialOffsetY = { it }
+        ) + fadeIn(animationSpec = tween(280)),
+        // 退场（进入多选模式）：向下滑出屏幕底部 —— 底部栏的消失方向就该是下沉。
         exit = slideOutVertically(
-            animationSpec = tween(300),
+            animationSpec = tween(250, easing = FastOutSlowInEasing),
             targetOffsetY = { it }
-        ) + fadeOut(animationSpec = tween(300)),
+        ) + fadeOut(animationSpec = tween(250)),
         modifier = modifier
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-                .graphicsLayer {
-                    translationY = (1f - floatProgress.value) * floatDistancePx
-                    alpha = floatProgress.value
-                },
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)
         ) {
