@@ -46,10 +46,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import com.example.notesapp.R
 import com.example.notesapp.data.Note
 import com.example.notesapp.ui.components.EmptyState
 import com.example.notesapp.ui.components.NoteCard
+import com.example.notesapp.ui.components.NoteDissolveBurst
+import com.example.notesapp.ui.components.NoteDissolveParticles
 import com.example.notesapp.ui.components.SearchBar
 import com.example.notesapp.ui.screens.home.HomeBottomBar
 import com.example.notesapp.ui.screens.home.HomeNoteSheet
@@ -123,7 +130,33 @@ fun HomeScreen(
     // 由 Compose 原生播放「自屏幕底边向上滑入」的入场动画（不会先播下滑的 exit）。
     val bottomBarVisible = remember(replayKey) { MutableTransitionState(false) }
 
+    // ===== 删除时的粒子飘散（参考系统通知消散效果）=====
+    // cardBounds：每张卡片在 root 坐标系中的矩形，删除时据此确定粒子爆发的区域。
+    // 用普通 mutableMap 保存即可：只在删除瞬间读取，不需要参与重组。
+    val cardBounds = remember { mutableMapOf<Long, Rect>() }
+    // 粒子覆盖层自身在 root 坐标系中的原点，用于把卡片矩形换算到覆盖层本地坐标
+    var particleOrigin by remember { mutableStateOf(Offset.Zero) }
+    var dissolveBursts by remember { mutableStateOf<List<NoteDissolveBurst>>(emptyList()) }
+    var dissolveSeq by remember { mutableStateOf(0L) }
+
+    /** 在卡片当前位置生成一次粒子飘散（纯视觉，不影响删除/撤销的数据流）。 */
+    fun spawnDissolve(noteId: Long) {
+        val bounds = cardBounds[noteId] ?: return
+        val origin = particleOrigin
+        dissolveSeq += 1
+        dissolveBursts = dissolveBursts + NoteDissolveBurst(
+            id = dissolveSeq,
+            area = Rect(
+                left = bounds.left - origin.x,
+                top = bounds.top - origin.y,
+                right = bounds.right - origin.x,
+                bottom = bounds.bottom - origin.y
+            )
+        )
+    }
+
     fun deleteWithUndo(note: Note, message: String) {
+        spawnDissolve(note.id)
         viewModel.deleteNote(note)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
@@ -244,34 +277,52 @@ fun HomeScreen(
                     verticalItemSpacing = 8.dp
                 ) {
                     items(notes, key = { it.id }) { note ->
-                        NoteCard(
-                            note = note,
-                            isDark = isDark,
-                            radiusDp = cardRadius,
-                            shadowEnabled = cardShadow,
-                            selectionMode = selectionMode,
-                            isSelected = note.id in selectedIds,
-                            transparency = cardTransparency,
-                            onClick = {
-                                if (selectionMode) {
-                                    selectedIds = if (note.id in selectedIds) {
-                                        selectedIds - note.id
-                                    } else {
-                                        selectedIds + note.id
-                                    }
-                                } else {
-                                    onNoteClick(note.id)
+                        // 用一层 Box 记录卡片位置（不改 NoteCard 本体），
+                        // 删除时据此在卡片原位置生成粒子飘散。
+                        // animateItemPlacement 必须挂在列表直接子项上，故放在此处。
+                        Box(
+                            modifier = Modifier
+                                .animateItemPlacement()
+                                .onGloballyPositioned { coords ->
+                                    val pos = coords.positionInRoot()
+                                    cardBounds[note.id] = Rect(
+                                        left = pos.x,
+                                        top = pos.y,
+                                        right = pos.x + coords.size.width,
+                                        bottom = pos.y + coords.size.height
+                                    )
                                 }
-                            },
-                            onLongClick = { sheetNote = note },
-                            onSwipeDelete = {
-                                deleteWithUndo(note, context.getString(R.string.note_deleted))
-                            },
-                            onComplete = {
-                                deleteWithUndo(note, context.getString(R.string.todo_completed))
-                            },
-                            modifier = Modifier.animateItemPlacement()
-                        )
+                        ) {
+                            NoteCard(
+                                note = note,
+                                isDark = isDark,
+                                radiusDp = cardRadius,
+                                shadowEnabled = cardShadow,
+                                selectionMode = selectionMode,
+                                isSelected = note.id in selectedIds,
+                                transparency = cardTransparency,
+                                onClick = {
+                                    if (selectionMode) {
+                                        selectedIds = if (note.id in selectedIds) {
+                                            selectedIds - note.id
+                                        } else {
+                                            selectedIds + note.id
+                                        }
+                                    } else {
+                                        onNoteClick(note.id)
+                                    }
+                                },
+                                onLongClick = { sheetNote = note },
+                                onSwipeDelete = {
+                                    deleteWithUndo(note, context.getString(R.string.note_deleted))
+                                },
+                                onComplete = {
+                                    deleteWithUndo(note, context.getString(R.string.todo_completed))
+                                },
+                                // animateItemPlacement 已移到外层 Box（列表直接子项）
+                                modifier = Modifier
+                            )
+                        }
                     }
                 }
             }
@@ -295,7 +346,11 @@ fun HomeScreen(
                 onClearSelection = { selectedIds = emptySet() },
                 onDeleteSelected = {
                     val toDelete = notes.filter { it.id in selectedIds }
-                    toDelete.forEach { viewModel.deleteNote(it) }
+                    // 每张被删卡片各生成一次粒子飘散（先取位置，再删数据）
+                    toDelete.forEach { note ->
+                        spawnDissolve(note.id)
+                        viewModel.deleteNote(note)
+                    }
                     val count = toDelete.size
                     selectedIds = emptySet()
                     selectionMode = false
@@ -312,6 +367,20 @@ fun HomeScreen(
                 },
                 isDark = isDark,
                 modifier = Modifier.align(Alignment.BottomCenter)
+            )
+
+            // 删除笔记时的粒子飘散层：叠在最上层绘制，纯视觉，播完自我回收。
+            // onGloballyPositioned 记录本层原点，用于把卡片 root 坐标换算到本地坐标。
+            NoteDissolveParticles(
+                bursts = dissolveBursts,
+                sparkColor = if (isDark) Color.White else Color(0xFF3C3C44),
+                onBurstFinished = { id ->
+                    dissolveBursts = dissolveBursts.filterNot { it.id == id }
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(3f)
+                    .onGloballyPositioned { particleOrigin = it.positionInRoot() }
             )
         }
     }
