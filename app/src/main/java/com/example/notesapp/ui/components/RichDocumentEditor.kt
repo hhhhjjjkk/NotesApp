@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -117,6 +118,9 @@ fun RichDocumentEditor(
 ) {
     val density = LocalDensity.current
     val editorFocusRequester = focusRequester ?: remember { FocusRequester() }
+    // ⚠️ 重点：Compose 的「获得焦点」≠「输入法弹出」。
+    // 之前只调 requestFocus()，键盘要再点一两次才出来；必须显式 show IME。
+    val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
     var focusRequestKey by remember { mutableStateOf(0) }
 
@@ -139,6 +143,14 @@ fun RichDocumentEditor(
                     listState.scrollToItem(targetIndex)
                     withFrameNanos { }
                     editorFocusRequester.requestFocus()
+                    // requestFocus 后 IME 不一定立刻连上（尤其在页面转场期间，
+                    // 窗口尚未能接收输入法连接），这里等一帧后再 show，
+                    // 并再重试一次，避免「第一次点不弹键盘」。
+                    withFrameNanos { }
+                    keyboardController?.show()
+                    // 再补一帧重试一次：转场期间首次 show() 可能因窗口未就绪而无效
+                    withFrameNanos { }
+                    keyboardController?.show()
                 }
             }
         }
@@ -152,6 +164,9 @@ fun RichDocumentEditor(
                 .clickable {
                     onBlankAreaClick()
                     focusRequestKey++
+                    // 点空白处立即唤起键盘：由上面的 LaunchedEffect 聚焦后 show()
+                    // 这里不直接 requestFocus（目标块可能刚创建、尚未组合），
+                    // 交给 effect 更可靠。
                 },
             // 底部留出空间，避免最后一块内容被编辑页的浮动颜色条遮挡
             contentPadding = PaddingValues(bottom = 96.dp)
@@ -173,7 +188,11 @@ fun RichDocumentEditor(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
                                 .combinedClickable(
-                                    onClick = { blockFocusRequester.requestFocus() },
+                                    onClick = {
+                                        blockFocusRequester.requestFocus()
+                                        // 点击即唤起输入法，不需要用户再点第二次
+                                        keyboardController?.show()
+                                    },
                                     onLongClick = {}
                                 )
                         ) {

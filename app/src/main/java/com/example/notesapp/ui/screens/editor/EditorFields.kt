@@ -2,6 +2,8 @@ package com.example.notesapp.ui.screens.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,9 +12,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -29,14 +34,37 @@ import com.example.notesapp.R
 fun EditorTitleField(
     title: String,
     onTitleChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    /** 点击标题时用于显式唤起输入法（Compose 的焦点不等于键盘，必须手动 show） */
+    onRequestKeyboard: () -> Unit = {}
 ) {
-    BasicTextField(
-        value = title,
-        onValueChange = onTitleChange,
+    // 注意：clickable 不能直接挂在 BasicTextField 的 modifier 上（会干扰文本
+    // 内部的点击定位/选区）。改为外层 Box 兜住「点空白处」的点击，
+    // 文本区域自身点击仍由 BasicTextField 处理。
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                onRequestKeyboard()
+            }
+    ) {
+        BasicTextField(
+        value = title,
+        onValueChange = onTitleChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (focusRequester != null) {
+                    Modifier.focusRequester(focusRequester)
+                } else {
+                    Modifier
+                }
+            ),
         textStyle = TextStyle(
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
@@ -55,6 +83,7 @@ fun EditorTitleField(
             innerTextField()
         }
     )
+    }
 }
 
 /**

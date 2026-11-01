@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.NotesApplication
@@ -57,6 +58,9 @@ fun EditorScreen(
 ) {
     val state = rememberEditorState()
     val bodyFocusRequester = remember { FocusRequester() }
+    val titleFocusRequester = remember { FocusRequester() }
+    // 显式唤起输入法：Compose 里获得焦点并不等于键盘弹出
+    val keyboardController = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
     val imageStore = remember(context) {
         (context.applicationContext as NotesApplication).imageStore
@@ -144,7 +148,12 @@ fun EditorScreen(
             ) {
                 EditorTitleField(
                     title = state.title,
-                    onTitleChange = { state.title = it }
+                    onTitleChange = { state.title = it },
+                    focusRequester = titleFocusRequester,
+                    onRequestKeyboard = {
+                        titleFocusRequester.requestFocus()
+                        keyboardController?.show()
+                    }
                 )
 
                 // 回收站只读横幅：通知深链可能直达已移入回收站的笔记。
