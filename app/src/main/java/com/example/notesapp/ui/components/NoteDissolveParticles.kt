@@ -27,10 +27,13 @@ import kotlin.random.Random
  *
  * @param id 唯一标识（用于 Composable key 与动画驱动）
  * @param area 被删卡片在**本覆盖层坐标系**中的矩形（由调用方换算好）
+ * @param direction 飘散主方向：-1 = 向左、+1 = 向右、0 = 无偏置（四周均匀）。
+ *        由滑动删除的手势方向传入，让粒子顺着卡片滑走的方向飘去。
  */
 data class NoteDissolveBurst(
     val id: Long,
-    val area: Rect
+    val area: Rect,
+    val direction: Int = 0
 )
 
 /** 整段粒子飘散时长（与参考视频实测一致：约 0.5s 散尽）。 */
@@ -121,14 +124,15 @@ fun NoteDissolveParticles(
 /**
  * 按爆发 id 作为种子生成全部粒子（同一次爆发每次重组得到相同结果）。
  *
- * 参数取值对齐参考视频：数量 70~114、半径约 0.55~2.5dp（少量亮点）、
- * 亮度 0.55~1.0、寿命 0.78~1.08 倍。
+ * 参数取值对齐参考视频：粒子**小而密**——数量 150~230、半径约 0.30~1.05dp
+ * （仅约 8% 为 1.1~1.6dp 的亮点）、亮度 0.5~1.0、寿命 0.78~1.08 倍。
+ * v3.7.6 起按用户反馈把粒子整体缩小、数量翻倍，接近原视频的细密星尘感。
  */
 private fun createSparkles(burst: NoteDissolveBurst, density: Density): List<Sparkle> {
     val area = burst.area
     // 用 id 与区域宽度混合做种子，保证不同卡片不会得到完全一致的花纹
     val rnd = Random(burst.id * 31L + area.width.toLong())
-    val count = 70 + rnd.nextInt(45)
+    val count = 150 + rnd.nextInt(80)
     val dp = density.density
     return List(count) {
         val startX = area.left + rnd.nextFloat() * area.width
@@ -137,20 +141,23 @@ private fun createSparkles(burst: NoteDissolveBurst, density: Density): List<Spa
         // 扩散幅度：相对卡片尺寸的比例，避免小卡片炸得过大、大卡片炸得太小
         val spread = 0.10f + rnd.nextFloat() * 0.38f
         val outward = 0.35f + rnd.nextFloat() * 0.65f
-        val isGlint = rnd.nextFloat() < 0.12f
+        val isGlint = rnd.nextFloat() < 0.08f
         Sparkle(
             startX = startX,
             startY = startY,
-            dx = cos(angle) * spread * area.width * outward,
+            // 方向偏置：direction=±1 时叠加一份顺着滑动方向的漂移，
+            // 让整体云团朝卡片滑走的方向移动；direction=0 保持四周均匀扩散。
+            dx = cos(angle) * spread * area.width * outward +
+                burst.direction * (0.10f + rnd.nextFloat() * 0.22f) * area.width,
             dy = sin(angle) * spread * area.height * outward,
             // 轻微重力：末段整体略微下坠，符合粉尘直觉
             gravity = (0.10f + rnd.nextFloat() * 0.22f) * area.height,
             radius = (if (isGlint) {
-                1.6f + rnd.nextFloat() * 0.9f
+                1.10f + rnd.nextFloat() * 0.50f
             } else {
-                0.55f + rnd.nextFloat() * 0.85f
+                0.30f + rnd.nextFloat() * 0.75f
             }) * dp,
-            brightness = if (isGlint) 1f else 0.55f + rnd.nextFloat() * 0.45f,
+            brightness = if (isGlint) 1f else 0.50f + rnd.nextFloat() * 0.50f,
             life = 0.78f + rnd.nextFloat() * 0.30f
         )
     }

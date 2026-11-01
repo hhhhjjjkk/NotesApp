@@ -70,7 +70,8 @@ fun NoteCard(
     shadowEnabled: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onSwipeDelete: () -> Unit = {},
+    /** 滑动删除回调。direction: -1 = 向左滑出，+1 = 向右滑出，0 = 非滑动手势 */
+    onSwipeDelete: (direction: Int) -> Unit = {},
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     isSelected: Boolean = false,
@@ -98,14 +99,20 @@ fun NoteCard(
     val shape = RoundedCornerShape(radiusDp.dp)
     val (scaleModifier, interactionSource) = rememberPressableGlassScale(pressedScale = 0.97f)
 
-    // 左滑删除：选择模式下禁用，避免误删
+    // 双向滑动删除：左滑（EndToStart）与右滑（StartToEnd）都可删除，
+    // 选择模式下禁用，避免误删。回调会带上滑出方向，供粒子飘散使用。
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onSwipeDelete()
-                true
-            } else {
-                false
+            when (value) {
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onSwipeDelete(-1)   // 卡片向左滑出
+                    true
+                }
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onSwipeDelete(1)    // 卡片向右滑出
+                    true
+                }
+                else -> false
             }
         }
     )
@@ -113,7 +120,7 @@ fun NoteCard(
     SwipeToDismissBox(
         state = dismissState,
         modifier = modifier,
-        enableDismissFromStartToEnd = false,
+        enableDismissFromStartToEnd = !selectionMode,
         enableDismissFromEndToStart = !selectionMode,
         backgroundContent = {
             // 红色删除背景跟随滑动进度渐变：
@@ -130,6 +137,14 @@ fun NoteCard(
                     if (raw < 0.05f) 0f else raw
                 }
             }
+            // 滑动方向：offset > 0 表示卡片被向右推（右滑删除），< 0 为左滑删除。
+            // 删除图标始终放在「卡片滑走后露出的那一侧」，符合直觉。
+            val offsetNow by remember(dismissState) {
+                derivedStateOf {
+                    runCatching { dismissState.requireOffset() }.getOrDefault(0f)
+                }
+            }
+            val iconOnEnd = offsetNow >= 0f
             // 静止时不渲染任何背景层，确保完全透出壁纸
             if (progress > 0f) {
                 Box(
@@ -140,7 +155,7 @@ fun NoteCard(
                             MaterialTheme.colorScheme.errorContainer.copy(alpha = progress)
                         )
                         .padding(horizontal = 20.dp),
-                    contentAlignment = Alignment.CenterEnd
+                    contentAlignment = if (iconOnEnd) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,

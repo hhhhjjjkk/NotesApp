@@ -139,13 +139,18 @@ fun HomeScreen(
     var dissolveBursts by remember { mutableStateOf<List<NoteDissolveBurst>>(emptyList()) }
     var dissolveSeq by remember { mutableStateOf(0L) }
 
-    /** 在卡片当前位置生成一次粒子飘散（纯视觉，不影响删除/撤销的数据流）。 */
-    fun spawnDissolve(noteId: Long) {
+    /**
+     * 在卡片当前位置生成一次粒子飘散（纯视觉，不影响删除/撤销的数据流）。
+     * @param direction 飘散主方向：-1 = 左滑删除（向左飘）、+1 = 右滑删除（向右飘）、
+     *        0 = 其他删除入口（四周均匀飘散）
+     */
+    fun spawnDissolve(noteId: Long, direction: Int = 0) {
         val bounds = cardBounds[noteId] ?: return
         val origin = particleOrigin
         dissolveSeq += 1
         dissolveBursts = dissolveBursts + NoteDissolveBurst(
             id = dissolveSeq,
+            direction = direction,
             area = Rect(
                 left = bounds.left - origin.x,
                 top = bounds.top - origin.y,
@@ -155,8 +160,8 @@ fun HomeScreen(
         )
     }
 
-    fun deleteWithUndo(note: Note, message: String) {
-        spawnDissolve(note.id)
+    fun deleteWithUndo(note: Note, message: String, direction: Int = 0) {
+        spawnDissolve(note.id, direction)
         viewModel.deleteNote(note)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
@@ -313,11 +318,19 @@ fun HomeScreen(
                                     }
                                 },
                                 onLongClick = { sheetNote = note },
-                                onSwipeDelete = {
-                                    deleteWithUndo(note, context.getString(R.string.note_deleted))
+                                onSwipeDelete = { direction ->
+                                    deleteWithUndo(
+                                        note,
+                                        context.getString(R.string.note_deleted),
+                                        direction
+                                    )
                                 },
                                 onComplete = {
-                                    deleteWithUndo(note, context.getString(R.string.todo_completed))
+                                    deleteWithUndo(
+                                        note,
+                                        context.getString(R.string.todo_completed),
+                                        direction = 0
+                                    )
                                 },
                                 // animateItemPlacement 已移到外层 Box（列表直接子项）
                                 modifier = Modifier
