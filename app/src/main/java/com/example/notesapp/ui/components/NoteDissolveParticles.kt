@@ -124,15 +124,16 @@ fun NoteDissolveParticles(
 /**
  * 按爆发 id 作为种子生成全部粒子（同一次爆发每次重组得到相同结果）。
  *
- * 参数取值对齐参考视频：粒子**小而密**——数量 150~230、半径约 0.30~1.05dp
- * （仅约 8% 为 1.1~1.6dp 的亮点）、亮度 0.5~1.0、寿命 0.78~1.08 倍。
- * v3.7.6 起按用户反馈把粒子整体缩小、数量翻倍，接近原视频的细密星尘感。
+ * 参数取值对齐参考视频：粒子**小而密**——数量 260~350、半径约 0.55~1.25dp
+ * （仅约 6% 为 1.35~1.75dp 的亮点）、亮度 0.68~1.0、寿命 0.78~1.08 倍。
+ * v3.7.7 起进一步加密并提亮：v3.7.6 把半径降到 0.30~1.05dp 后在真机只有
+ * 1~3 像素、又偏暗，几乎看不出与上一版的差别，故回调到既有细密感又可见的档位。
  */
 private fun createSparkles(burst: NoteDissolveBurst, density: Density): List<Sparkle> {
     val area = burst.area
     // 用 id 与区域宽度混合做种子，保证不同卡片不会得到完全一致的花纹
     val rnd = Random(burst.id * 31L + area.width.toLong())
-    val count = 150 + rnd.nextInt(80)
+    val count = 260 + rnd.nextInt(91)
     val dp = density.density
     return List(count) {
         val startX = area.left + rnd.nextFloat() * area.width
@@ -141,23 +142,23 @@ private fun createSparkles(burst: NoteDissolveBurst, density: Density): List<Spa
         // 扩散幅度：相对卡片尺寸的比例，避免小卡片炸得过大、大卡片炸得太小
         val spread = 0.10f + rnd.nextFloat() * 0.38f
         val outward = 0.35f + rnd.nextFloat() * 0.65f
-        val isGlint = rnd.nextFloat() < 0.08f
+        val isGlint = rnd.nextFloat() < 0.06f
         Sparkle(
             startX = startX,
             startY = startY,
             // 方向偏置：direction=±1 时叠加一份顺着滑动方向的漂移，
             // 让整体云团朝卡片滑走的方向移动；direction=0 保持四周均匀扩散。
             dx = cos(angle) * spread * area.width * outward +
-                burst.direction * (0.10f + rnd.nextFloat() * 0.22f) * area.width,
+                burst.direction * (0.20f + rnd.nextFloat() * 0.45f) * area.width,
             dy = sin(angle) * spread * area.height * outward,
             // 轻微重力：末段整体略微下坠，符合粉尘直觉
             gravity = (0.10f + rnd.nextFloat() * 0.22f) * area.height,
             radius = (if (isGlint) {
-                1.10f + rnd.nextFloat() * 0.50f
+                1.35f + rnd.nextFloat() * 0.40f
             } else {
-                0.30f + rnd.nextFloat() * 0.75f
+                0.55f + rnd.nextFloat() * 0.70f
             }) * dp,
-            brightness = if (isGlint) 1f else 0.50f + rnd.nextFloat() * 0.50f,
+            brightness = if (isGlint) 1f else 0.68f + rnd.nextFloat() * 0.32f,
             life = 0.78f + rnd.nextFloat() * 0.30f
         )
     }
