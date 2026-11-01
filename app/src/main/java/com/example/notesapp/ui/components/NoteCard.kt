@@ -23,10 +23,7 @@ import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -36,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
@@ -101,102 +97,18 @@ fun NoteCard(
     val shape = RoundedCornerShape(radiusDp.dp)
     val (scaleModifier, interactionSource) = rememberPressableGlassScale(pressedScale = 0.97f)
 
-    // 双向滑动删除：左滑（EndToStart）与右滑（StartToEnd）都可删除，
-    // 选择模式下禁用，避免误删。回调会带上滑出方向，供粒子飘散使用。
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.EndToStart -> {
-                    onSwipeDelete(-1)   // 卡片向左滑出
-                    true
-                }
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    onSwipeDelete(1)    // 卡片向右滑出
-                    true
-                }
-                else -> false
-            }
-        }
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        modifier = modifier,
-        enableDismissFromStartToEnd = !selectionMode,
-        enableDismissFromEndToStart = !selectionMode,
-        backgroundContent = {
-            // 红色删除背景跟随滑动进度渐变：
-            // 直接读取 dismissState 的像素偏移自己计算进度，确保静止时 progress=0、
-            // 背景完全透明，从而透过卡片显示自定义壁纸；滑动时红色渐进显现。
-            val density = LocalDensity.current
-            val progress by remember(dismissState) {
-                derivedStateOf {
-                    // requireOffset 在未 layout 时可能抛异常，安全降级为 0
-                    val off = runCatching { dismissState.requireOffset() }.getOrDefault(0f)
-                    val maxPx = with(density) { 160.dp.toPx() }
-                    val raw = (abs(off) / maxPx).coerceIn(0f, 1f)
-                    // 低于阈值视为静止，强制全透明，杜绝任何残留透出
-                    if (raw < 0.05f) 0f else raw
-                }
-            }
-            // 滑动方向：offset > 0 表示卡片被向右推（右滑删除），< 0 为左滑删除。
-            // 删除图标始终放在「卡片滑走后露出的那一侧」，符合直觉。
-            val offsetNow by remember(dismissState) {
-                derivedStateOf {
-                    runCatching { dismissState.requireOffset() }.getOrDefault(0f)
-                }
-            }
-            val iconOnEnd = offsetNow >= 0f
-            // 静止时不渲染任何背景层，确保完全透出壁纸
-            if (progress > 0f) {
-                // 进度曲线：前半程快速显现，后半程趋于饱满，手感更「跟手」
-                val eased = (progress * progress * (3f - 2f * progress)) // smoothstep
-                // 底色的浓淡端放在「卡片滑走的方向」：左滑删除露出右侧，
-                // 故红色自右向左由满色渐到稍淡，形成纵深；alpha 保持高值以免发灰。
-                val far = MaterialTheme.colorScheme.errorContainer.copy(alpha = eased * 0.72f)
-                val mid = MaterialTheme.colorScheme.errorContainer.copy(alpha = eased * 0.88f)
-                val near = MaterialTheme.colorScheme.errorContainer.copy(alpha = eased * 1.0f)
-                val brush = Brush.horizontalGradient(
-                    colors = if (iconOnEnd) listOf(near, mid, far)
-                    else listOf(far, mid, near)
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // 与卡片同圆角，避免滑开时露出直角
-                        .clip(shape)
-                        .background(brush)
-                        .padding(horizontal = 20.dp),
-                    contentAlignment = if (iconOnEnd) Alignment.CenterEnd else Alignment.CenterStart
-                ) {
-                    // 实心圆底 + 白色图标：与红色底板形成强对比，一眼可辨；
-                    // 随进度放大（0.86→1.08），接近删除阈值时「呼之欲出」。
-                    val iconScale = 0.86f + 0.22f * eased
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .graphicsLayer {
-                                scaleX = iconScale
-                                scaleY = iconScale
-                                alpha = eased
-                            }
-                            .background(
-                                color = MaterialTheme.colorScheme.error.copy(alpha = eased),
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onError.copy(alpha = eased),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-        }
+    // 液态侧滑删除（v3.9.0 重写）：替代 SwipeToDismissBox 的整卡滑走。
+    // 交互参考鸿蒙通知中心：卡片本体只轻微跟随，滑动侧长出圆球跟手，
+    // 卡片与圆球之间有液态粘连，松手不足阈值时圆球 Q 弹回（低阻尼弹簧），
+    // 超过阈值触发删除。左滑/右滑双向可用，选择模式下禁用（enabled=false）。
+    LiquidSwipeDelete(
+        enabled = !selectionMode,
+        onConfirmDelete = { direction -> onSwipeDelete(direction) },
+        deleteIcon = { DeleteBallIcon() },
+        modifier = modifier
     ) {
+        // 液态方案的删除指示就是圆球本身（Canvas 绘制 + 跟手图标），
+        // 不再需要整片红色底板；卡片内容即下方 content。
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -423,4 +335,28 @@ private fun TodoCompleteButton(
 private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+/**
+ * 液态侧滑删除的圆球图标：半透明深色圆底 + 白色垃圾桶，
+ * 叠在 Canvas 画的浅色粘连球体上，任何壁纸上都可辨。
+ */
+@Composable
+private fun DeleteBallIcon() {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .background(
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Delete,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
+        )
+    }
 }
