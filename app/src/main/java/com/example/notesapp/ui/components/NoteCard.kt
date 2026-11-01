@@ -36,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -147,21 +149,50 @@ fun NoteCard(
             val iconOnEnd = offsetNow >= 0f
             // 静止时不渲染任何背景层，确保完全透出壁纸
             if (progress > 0f) {
+                // 进度曲线：前半程快速显现，后半程趋于饱满，手感更「跟手」
+                val eased = (progress * progress * (3f - 2f * progress)) // smoothstep
+                // 底色的浓淡端放在「卡片滑走的方向」：左滑删除露出右侧，
+                // 故红色自右向左由满色渐到稍淡，形成纵深；alpha 保持高值以免发灰。
+                val far = MaterialTheme.colorScheme.errorContainer.copy(alpha = eased * 0.72f)
+                val mid = MaterialTheme.colorScheme.errorContainer.copy(alpha = eased * 0.88f)
+                val near = MaterialTheme.colorScheme.errorContainer.copy(alpha = eased * 1.0f)
+                val brush = Brush.horizontalGradient(
+                    colors = if (iconOnEnd) listOf(near, mid, far)
+                    else listOf(far, mid, near)
+                )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        // 与卡片同圆角，避免滑开时露出直角
                         .clip(shape)
-                        .background(
-                            MaterialTheme.colorScheme.errorContainer.copy(alpha = progress)
-                        )
+                        .background(brush)
                         .padding(horizontal = 20.dp),
                     contentAlignment = if (iconOnEnd) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = progress)
-                    )
+                    // 实心圆底 + 白色图标：与红色底板形成强对比，一眼可辨；
+                    // 随进度放大（0.86→1.08），接近删除阈值时「呼之欲出」。
+                    val iconScale = 0.86f + 0.22f * eased
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .graphicsLayer {
+                                scaleX = iconScale
+                                scaleY = iconScale
+                                alpha = eased
+                            }
+                            .background(
+                                color = MaterialTheme.colorScheme.error.copy(alpha = eased),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onError.copy(alpha = eased),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
