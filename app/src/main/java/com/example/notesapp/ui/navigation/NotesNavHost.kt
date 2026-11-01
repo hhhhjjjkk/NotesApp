@@ -63,8 +63,17 @@ fun NotesNavHost(
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
     // 与视频实测对齐：整个开合约 460~540ms，动作柔和、无弹出感
     val editorExpandDuration = (duration + 200).coerceIn(460, 540)
-    // 编辑页淡入淡出的起始缩放：以淡化为主，略带"慢慢铺满"的落位感
-    val editorScale = 0.88f
+    // 退场比进场略快（约 0.82 倍）：离开是被拒绝的动作，停留时间应短于进入。
+    // 这是动效设计的通用惯例——进场从容、退场果断，避免"关门拖沓"感。
+    val editorExitDuration = (editorExpandDuration * 0.82f).toInt().coerceIn(380, 460)
+    // 编辑页进场缩放：**从略大收拢到 1.0**（不是从小放大）。
+    // 打开一个页面时内容「铺满后落定」才像展开；从小放大更像是从远处飞过来，
+    // 观感上偏"弹出"，与「慢慢铺满全屏」的预期相反。
+    val editorEnterScale = 1.06f
+    // 退场收缩终点：略小于 1.0，配合更快时长形成"向内收走"的离开感
+    val editorExitScale = 0.94f
+    // 退场专用缓动：先慢后快（加速离开），与进场的先快后慢相反
+    val editorExitEasing = CubicBezierEasing(0.4f, 0.0f, 1f, 1f)
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
@@ -93,7 +102,8 @@ fun NotesNavHost(
     // 悬浮 200ms+，出现「双重影像」。从设置/回收站返回仍用普通 duration。
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         if (initialState.destination.route == Screen.Editor.route) {
-            fadeIn(tween(editorExpandDuration, easing = editorExpandEasing))
+            // 与编辑页退场（editorPopExit 的 editorExitDuration）严格同步，否则双影
+            fadeIn(tween(editorExitDuration, easing = editorExitEasing))
         } else {
             fadeIn(tween(duration, easing = sharedEasing))
         }
@@ -126,19 +136,22 @@ fun NotesNavHost(
     // 编辑页：以淡化为主 + 轻微缩落位（对齐参考视频的手感）。
     // scale 与 fade 共用同一时长、同一曲线，结束时透明度恰好归零，
     // 不会有"画面还很大却瞬间消失"的残影。
+    // 进场：从略大（1.06）收拢到 1.0，配合淡入，形成「铺满后落定」的展开感。
+    // fade 与 scale 共用同一时长与曲线，结束时透明度恰好归零，不留残影。
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         fadeIn(tween(editorExpandDuration, easing = editorExpandEasing)) +
             scaleIn(
                 animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-                initialScale = editorScale,
+                initialScale = editorEnterScale,
                 transformOrigin = TransformOrigin.Center
             )
     }
+    // 退场：更快 + 加速曲线 + 收到 0.94，形成「向内收走」的果断离开感
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        fadeOut(tween(editorExpandDuration, easing = editorExpandEasing)) +
+        fadeOut(tween(editorExitDuration, easing = editorExitEasing)) +
             scaleOut(
-                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-                targetScale = editorScale,
+                animationSpec = tween(editorExitDuration, easing = editorExitEasing),
+                targetScale = editorExitScale,
                 transformOrigin = TransformOrigin.Center
             )
     }
