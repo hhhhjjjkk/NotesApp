@@ -3,6 +3,7 @@ package com.example.notesapp.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -28,23 +29,26 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * 液态侧滑删除（参考鸿蒙通知中心的「圆球跟手 + 粘连 + Q 弹」交互）。
+ * 液态侧滑删除 v2（v3.9.3 重写交互模型）。
  *
- * v3.9.2 修复：v3.9.0 的 metaball 用 acos/虚拟大圆计算公切点，
- * 且左滑时把卡片边缘取在了错误的一侧（圆球图标却在另一侧），
- * 路径坐标失控后会填充出横跨半屏的巨型墨滴并溢出到相邻卡片。
- * 现改为**有界锥形脖子**：两段贝塞尔从卡片边缘连到圆球中心区，
- * 接点由圆球圆面盖住；所有坐标都在 [edge, ball] 之间，结构上不可能越界。
+ * v3.9.2 仍有一个根本问题：卡片只跟随 18%，球和脖子画在卡片内容「上方」，
+ * 观感是白球白脖子压在文字上。本版改为与参考视频一致的模型：
  *
- * - 圆球 1:1 跟手（左滑从右边缘长出向左走，右滑相反）；
- * - 卡片本体以 18% 阻尼轻微跟随；
- * - 粘连脖子随距离收窄，超过 [breakDistancePx] 断开（只余圆球）；
- * - 松手不足阈值：低阻尼弹簧 Q 弹回；超过：触发 [onConfirmDelete]
- *   （-1 = 向左滑删除，+1 = 向右滑删除）。
+ * - **卡片真实滑走**（80% 跟手），让出揭示区；
+ * - **圆球钉在屏幕边缘**（左滑→右屏边，右滑→左屏边），从卡片滑开时就地显现；
+ * - **粘连脖子只在揭示区内**连接卡片尾缘与圆球：拖得越远拉得越长越细，
+ *   超过 64dp 撕裂；Canvas 画在卡片**下层**，球从卡片边缘「钻出来」；
+ * - 松手不足阈值：卡片低阻尼弹簧 Q 弹回位，圆球以更低阻尼弹簧贴回卡片边缘、
+   被回位的卡片自然盖住——两个弹簧独立wobble，产生粘连拖尾手感；
+ * - 超过阈值（卡宽 32%）：触发删除（-1 左滑 / +1 右滑），粒子飘散方向沿用。
+ *
+ * 所有坐标都被限制在「卡片尾缘 ↔ 屏幕边」之间，几何上不可能越界爆开。
  */
 @Composable
 fun LiquidSwipeDelete(
@@ -59,31 +63,37 @@ fun LiquidSwipeDelete(
     val scope = rememberCoroutineScope()
 
     val ballRadius = with(density) { 22.dp.toPx() }
-    val breakDistancePx = with(density) { 56.dp.toPx() }
+    val breakDistancePx = with(density) { 64.dp.toPx() }
     val deleteFraction = 0.32f
+    val cardFollow = 0.8f
 
     var widthPx by remember { mutableFloatStateOf(1f) }
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
+    var lastDir by remember { mutableFloatStateOf(-1f) }
+    var ballVisible by remember { mutableStateOf(false) }
 
-    val ballOffset = remember { Animatable(0f) }
+    // 卡片位移；球心 X 绝对坐标；图标透明度
     val cardShift = remember { Animatable(0f) }
+    val ballX = remember { Animatable(0f) }
+    val iconAlpha = remember { Animatable(0f) }
 
-    var ballJob by remember { mutableStateOf<Job?>(null) }
     var cardJob by remember { mutableStateOf<Job?>(null) }
+    var ballJob by remember { mutableStateOf<Job?>(null) }
 
-    fun animateBack() {
-        ballJob = scope.launch {
-            ballOffset.animateTo(
-                0f,
-                spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMedium)
-            )
-        }
-        cardJob = scope.launch {
-            cardShift.animateTo(
-                0f,
-                spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium)
-            )
+    fun restBallCx(dir: Float) = if (dir < 0f) widthPx - ballRadius else ballRadius
+    fun edgeBase(dir: Float) = if (dir < 0f) widthPx else 0f
+
+    // 拖动中逐帧：卡片跟手，球钉在屏边
+    LaunchedEffect(dragX, dragging) {
+        if (dragging) {
+            cardShift.snapTo(dragX * cardFollow)
+            if (abs(dragX) > 4f) {
+                lastDir = if (dragX < 0f) -1f else 1f
+                ballX.snapTo(restBallCx(lastDir))
+                ballVisible = true
+                iconAlpha.snapTo(1f)
+            }
         }
     }
 
@@ -91,24 +101,37 @@ fun LiquidSwipeDelete(
         if (!dragging) return
         dragging = false
         val travelled = abs(dragX)
+        val dir = lastDir
         if (travelled >= widthPx * deleteFraction) {
-            val dir = if (dragX < 0f) -1 else 1
+            // 删除：状态复位，回调交由列表移除本卡片（粒子在 HomeScreen 侧）
             dragX = 0f
+            ballVisible = false
             scope.launch {
-                ballOffset.snapTo(0f)
                 cardShift.snapTo(0f)
+                iconAlpha.snapTo(0f)
             }
-            onConfirmDelete(dir)
+            onConfirmDelete(dir.toInt())
         } else {
-            animateBack()
-        }
-    }
-
-    // 拖动期间逐帧同步（dragX 每帧变化都会重启本 effect）
-    LaunchedEffect(dragX, dragging) {
-        if (dragging) {
-            ballOffset.snapTo(dragX)
-            cardShift.snapTo(dragX * 0.18f)
+            // Q 弹回：卡片与圆球各自弹簧（不同阻尼 → 独立 wobble = 粘连拖尾）
+            cardJob = scope.launch {
+                cardShift.animateTo(
+                    0f,
+                    spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
+                )
+            }
+            ballJob = scope.launch {
+                // 球贴回卡片边缘外侧 0.35r 处；卡片归位后被卡片盖住
+                ballX.animateTo(
+                    edgeBase(dir) - dir * 0.35f * ballRadius,
+                    spring(dampingRatio = 0.36f, stiffness = Spring.StiffnessMedium)
+                )
+            }
+            scope.launch {
+                cardJob?.join()
+                ballVisible = false
+                iconAlpha.animateTo(0f, tween(120))
+                ballX.snapTo(0f)
+            }
         }
     }
 
@@ -119,11 +142,10 @@ fun LiquidSwipeDelete(
                 if (!enabled) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragStart = {
-                        // cancel 非 suspend，可在手势回调中直接调用
-                        ballJob?.cancel()
                         cardJob?.cancel()
+                        ballJob?.cancel()
                         dragging = true
-                        dragX = ballOffset.value
+                        dragX = 0f
                     },
                     onDragEnd = { release() },
                     onDragCancel = { release() }
@@ -133,32 +155,34 @@ fun LiquidSwipeDelete(
                 }
             }
     ) {
-        // 卡片本体：18% 阻尼跟随，产生「被拖着走一点」的手感
-        Box(modifier = Modifier.graphicsLayer { translationX = cardShift.value }) {
-            content()
-        }
-
-        val bx = ballOffset.value
-        if (abs(bx) > 0.5f) {
-            val shift = cardShift.value
+        // 球与脖子画在卡片「下层」：球从卡片边缘钻出来，永远只出现在揭示区
+        if (ballVisible) {
             Canvas(Modifier.fillMaxSize()) {
                 drawLiquid(
-                    ballOffsetX = bx,
-                    cardShiftX = shift,
+                    cardShiftX = cardShift.value,
+                    ballCx = ballX.value,
+                    dir = lastDir,
                     ballRadius = ballRadius,
                     breakDistancePx = breakDistancePx,
                     color = ballTint
                 )
             }
+        }
+
+        // 卡片本体：80% 跟手滑走
+        Box(modifier = Modifier.graphicsLayer { translationX = cardShift.value }) {
+            content()
+        }
+
+        // 删除图标：叠在揭示区的圆球上（与 Canvas 球同一圆心）
+        if (ballVisible) {
             Box(Modifier.fillMaxSize()) {
                 Box(
                     modifier = Modifier
-                        // 左滑（bx<0）圆球从右边缘长出；右滑从左边缘
-                        .align(if (bx < 0f) Alignment.CenterEnd else Alignment.CenterStart)
+                        .align(if (lastDir < 0f) Alignment.CenterEnd else Alignment.CenterStart)
                         .graphicsLayer {
-                            // 与 Canvas 圆球同一圆心：圆球静止圆心在
-                            // edge ∓ ballRadius，再随拖动与卡片位移移动
-                            translationX = bx + shift
+                            translationX = ballX.value - restBallCx(lastDir)
+                            alpha = iconAlpha.value
                         }
                 ) {
                     deleteIcon()
@@ -169,41 +193,46 @@ fun LiquidSwipeDelete(
 }
 
 /**
- * 有界液态粘连：从卡片边缘到圆球画一段锥形脖子（两段三次贝塞尔），
- * 接点半宽 t2 < 圆球半径，由后画的圆球圆面盖住接缝。
- * 全部坐标落在 [min(edge,ball), max(edge,ball)] × [cy±r] 内，不可能越界爆开。
+ * 有界液态粘连：脖子从「卡片尾缘」连到「圆球近侧」，两段三次贝塞尔锥形收窄，
+ * 接点由圆球圆面盖住。X 全程夹在 [min(边,球), max(边,球)]，不可能越界。
  */
 private fun DrawScope.drawLiquid(
-    ballOffsetX: Float,
     cardShiftX: Float,
+    ballCx: Float,
+    dir: Float,
     ballRadius: Float,
     breakDistancePx: Float,
     color: Color
 ) {
-    val dist = abs(ballOffsetX)
-    if (dist < 0.5f) return
-    val dir = if (ballOffsetX < 0f) -1f else 1f
+    if (ballCx <= 0f) return
     val cy = size.height / 2f
-    // 卡片内容被推移 cardShift；圆球从内容当时的边缘长出
-    val edgeX = (if (dir < 0f) size.width else 0f) + cardShiftX
-    val ballCx = edgeX + dir * (ballRadius + dist)
-    val ballCy = cy
 
-    // 圆球本体
-    drawCircle(color = color, radius = ballRadius, center = Offset(ballCx, ballCy), style = Fill)
+    // 圆球本体（带轻微拉伸：跟手时沿运动方向略扁，更 Q）
+    drawCircle(color = color, radius = ballRadius, center = Offset(ballCx, cy), style = Fill)
 
-    // 粘连脖子：超过断裂距离就只余圆球
-    if (dist >= breakDistancePx) return
+    // 卡片尾缘位置（卡片滑移后）
+    val cardEdgeX = if (dir < 0f) size.width + cardShiftX else 0f + cardShiftX
+    // 球的近侧（朝向卡片）
+    val ballNearX = ballCx - dir * ballRadius
+    // 脖子长度：卡片边到球近侧
+    val gap = abs(ballNearX - cardEdgeX)
+    if (gap < ballRadius * 0.2f || gap >= breakDistancePx) return
 
-    val t1 = ballRadius * 1.04f   // 边缘处半宽（略鼓，液感）
-    val t2 = ballRadius * 0.72f   // 接球处半宽（收窄，由圆面盖住接点）
-    val midX = edgeX + (ballCx - edgeX) * 0.45f
+    val progress = (gap / breakDistancePx).coerceIn(0f, 1f)
+    val t1 = ballRadius * (0.92f - 0.30f * progress)   // 卡片侧半宽（收窄）
+    val t2 = ballRadius * (0.58f - 0.28f * progress)   // 球侧半宽（由球面盖住）
+
+    val fromX = min(cardEdgeX, ballNearX)
+    val toX = max(cardEdgeX, ballNearX)
+    val span = (toX - fromX).coerceAtLeast(1f)
+    val m1 = fromX + span * 0.35f
+    val m2 = fromX + span * 0.70f
 
     val neck = Path().apply {
-        moveTo(edgeX, ballCy - t1)
-        cubicTo(midX, ballCy - t1, ballCx, ballCy - t2, ballCx, ballCy - t2)
-        lineTo(ballCx, ballCy + t2)
-        cubicTo(midX, ballCy + t1, edgeX, ballCy + t1, edgeX, ballCy + t1)
+        moveTo(fromX, cy - t1)
+        cubicTo(m1, cy - t1, m2, cy - t2, toX, cy - t2)
+        lineTo(toX, cy + t2)
+        cubicTo(m2, cy + t2, m1, cy + t1, fromX, cy + t1)
         close()
     }
     drawPath(neck, color, style = Fill)
