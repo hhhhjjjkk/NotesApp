@@ -1,5 +1,54 @@
 # Changelog
 
+## v3.9.0 (versionCode 52)
+
+- **液态侧滑删除**：重写侧滑交互（参考鸿蒙通知中心）——卡片轻微跟随、删除圆球 1:1 跟手、卡片与圆球间 metaball 液态粘连（超过 56dp 撕裂）、松手不足阈值低阻尼弹簧 Q 弹回弹、超过卡片宽 32% 触发删除；移除旧红色渐变底板；粒子飘散方向保留
+- 移除 SwipeToDismissBox 依赖
+
+## v3.8.1 (versionCode 51)
+
+- 退出备忘录动画改为与退出设置一致的水平滑动（编辑页右滑出、首页揭示）；首页淡入与滑动退场严格对齐，根治「双重影像」
+
+## v3.8.0 (versionCode 50)
+
+- **修复输入法要连点多次**：项目从未调用过 SoftwareKeyboardController。正文块点击、标题点击、自动聚焦 effect 全部补上显式 show()；自动聚焦改为 show→等帧→再 show 以重试转场期无效调用
+
+## v3.7.9 (versionCode 49)
+
+- 打开备忘录缩放改为 1.06→1.0 收拢落定；退场时长 0.82 倍、独立加速曲线
+
+## v3.7.8 (versionCode 48)
+
+- 美化滑动删除红色底板：渐变 + smoothstep 进度 + 实心圆底白图标 + 随进度缩放
+
+## v3.7.7 (versionCode 47)
+
+- 修正 v3.7.6 粒子过小不可见的问题：数量 260~350、半径 0.55~1.25dp、亮度下限 0.68；方向漂移加大至 0.20~0.45 倍卡宽
+
+## v3.7.6 (versionCode 46)
+
+- 粒子更小更密；滑动方向决定飘散方向（NoteCard 开启双向滑动、回传方向、删除图标随侧）
+
+## v3.7.5 (versionCode 45)
+
+- **新增删除粒子飘散**：卡片原位散出 70~114 颗星尘（~0.5s 淡尽），覆盖左滑/多选/待办完成入口；纯视觉层，撤销不受影响
+
+## v3.7.4 (versionCode 44)
+
+- **根治底栏上浮动画「向上飞」**（v3.7.0~3.7.3 反复出现）：移除手动 Animatable/snapTo 机制改回原生 AnimatedVisibility + slideInVertically；以 remember(replayKey) 重建 TransitionState 重播（不再翻转 targetState）；ON_RESUME 补发去重
+
+## v3.7.3 (versionCode 43)
+
+- 编辑页返回首页淡入对齐退场时长消除双影；滑块吸附弹簧 NoBouncy；按压反馈统一 0.97
+
+## v3.7.2 (versionCode 42)
+
+- 底栏上浮改为内容层单次动画 + 合并护栏（当时的最优修复，后由 v3.7.4 根治）
+
+## v3.7.1 (versionCode 41) / v3.7.0 (versionCode 40)
+
+- 视频对齐的柔和编辑页转场；首页侧转场多次调整（后证实根因在重播机制）
+
 ## v3.5.0 (versionCode 27)
 
 ### 新增
