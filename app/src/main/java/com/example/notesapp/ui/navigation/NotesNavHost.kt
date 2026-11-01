@@ -63,17 +63,10 @@ fun NotesNavHost(
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
     // 与视频实测对齐：整个开合约 460~540ms，动作柔和、无弹出感
     val editorExpandDuration = (duration + 200).coerceIn(460, 540)
-    // 退场比进场略快（约 0.82 倍）：离开是被拒绝的动作，停留时间应短于进入。
-    // 这是动效设计的通用惯例——进场从容、退场果断，避免"关门拖沓"感。
-    val editorExitDuration = (editorExpandDuration * 0.82f).toInt().coerceIn(380, 460)
     // 编辑页进场缩放：**从略大收拢到 1.0**（不是从小放大）。
     // 打开一个页面时内容「铺满后落定」才像展开；从小放大更像是从远处飞过来，
     // 观感上偏"弹出"，与「慢慢铺满全屏」的预期相反。
     val editorEnterScale = 1.06f
-    // 退场收缩终点：略小于 1.0，配合更快时长形成"向内收走"的离开感
-    val editorExitScale = 0.94f
-    // 退场专用缓动：先慢后快（加速离开），与进场的先快后慢相反
-    val editorExitEasing = CubicBezierEasing(0.4f, 0.0f, 1f, 1f)
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
@@ -97,13 +90,15 @@ fun NotesNavHost(
     // slideInVertically(initialOffsetY = { it }) 在父级变换未收敛时争夺落点；
     // 另有 LifecycleRegistry.addObserver 对已 RESUMED 的 entry 补发 ON_RESUME 的路径，
     // 会让 homeResumeCount 额外自增一次。两条都需要真机 log 才能定论，故不写死是其一。
-    // 交叉淡化时长对齐（勿删）：从编辑页返回首页时，首页淡入必须与编辑页退场
-    // （editorExpandDuration）同步；否则首页 ~300ms 就全亮、编辑页还在其上缩小
-    // 悬浮 200ms+，出现「双重影像」。从设置/回收站返回仍用普通 duration。
+    // 交叉淡化时长对齐（勿删）：从编辑页返回首页时，首页淡入必须与编辑页
+    // 滑动退场（exitSlideSpec，即普通 duration）严格同 spec；否则首页会先于
+    // 编辑页滑完而全亮/或滞后露出半透明页面，出现「双重影像」。
+    // 从设置/回收站返回同样用普通 duration，两类页面返回动作已统一。
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         if (initialState.destination.route == Screen.Editor.route) {
-            // 与编辑页退场（editorPopExit 的 editorExitDuration）严格同步，否则双影
-            fadeIn(tween(editorExitDuration, easing = editorExitEasing))
+            // 与编辑页滑动退场严格同 spec（同 duration、同曲线）：
+            // 首页在被揭示时同步淡入到位，快了慢了都会露出半透明首页
+            fadeIn(tween(duration, easing = sharedEasing))
         } else {
             fadeIn(tween(duration, easing = sharedEasing))
         }
@@ -146,14 +141,13 @@ fun NotesNavHost(
                 transformOrigin = TransformOrigin.Center
             )
     }
-    // 退场：更快 + 加速曲线 + 收到 0.94，形成「向内收走」的果断离开感
+    // 退场（返回首页）：与设置页完全一致的水平滑动——编辑页整体向右滑出，
+    // 首页静止被揭示。此前多版「缩小+淡出」（0.94/0.88 配不同曲线）真机反馈
+    // 始终不理想，改用与二级页相同的滑动退场，观感即「退出设置」的熟悉手感。
+    // 注意与 secondaryPopExit 保持同一 spec：同 duration、同曲线、同方向，
+    // 两类页面退出去的动作完全统一。
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        fadeOut(tween(editorExitDuration, easing = editorExitEasing)) +
-            scaleOut(
-                animationSpec = tween(editorExitDuration, easing = editorExitEasing),
-                targetScale = editorExitScale,
-                transformOrigin = TransformOrigin.Center
-            )
+        slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
 
     NavHost(
