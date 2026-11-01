@@ -103,6 +103,9 @@ fun NoteCard(
     // 超过阈值触发删除。左滑/右滑双向可用，选择模式下禁用（enabled=false）。
     LiquidSwipeDelete(
         enabled = !selectionMode,
+        // 粘连球体颜色跟随卡片内容色，深色内容用白球、浅色内容用深球
+        ballTint = if (baseColor.isDark()) Color.White.copy(alpha = 0.92f)
+                   else Color(0xFF3C3C44).copy(alpha = 0.92f),
         onConfirmDelete = { direction -> onSwipeDelete(direction) },
         deleteIcon = { DeleteBallIcon() },
         modifier = modifier
