@@ -3,12 +3,11 @@ package com.example.notesapp.ui.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -20,9 +19,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -33,6 +33,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.notesapp.ui.components.YunXMotion
 import com.example.notesapp.ui.screens.EditorScreen
 import com.example.notesapp.ui.screens.HomeScreen
 import com.example.notesapp.ui.screens.SettingsScreen
@@ -46,7 +47,6 @@ private fun animDuration(animSpeed: Float): Int =
 
 // 统一使用对称缓动曲线（先加速后减速），进入和退出速度感受完全一致
 private val sharedEasing = FastOutSlowInEasing
-private val editorExpandEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 @Composable
 fun NotesNavHost(
@@ -61,12 +61,6 @@ fun NotesNavHost(
     val duration = animDuration(animSpeed)
     // fade 与 slide 同 duration，避免进入退出速度感受不一致
     val fadeDuration = (duration * 0.6f).toInt().coerceAtLeast(80)
-    // 与视频实测对齐：整个开合约 460~540ms，动作柔和、无弹出感
-    val editorExpandDuration = (duration + 200).coerceIn(460, 540)
-    // 编辑页进场缩放：**从略大收拢到 1.0**（不是从小放大）。
-    // 打开一个页面时内容「铺满后落定」才像展开；从小放大更像是从远处飞过来，
-    // 观感上偏"弹出"，与「慢慢铺满全屏」的预期相反。
-    val editorEnterScale = 1.06f
 
     // 通知点击进入时跳转到对应笔记编辑页（支持冷启动与热启动两种场景）
     LaunchedEffect(initialNoteId) {
@@ -128,17 +122,16 @@ fun NotesNavHost(
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
-    // 编辑页：以淡化为主 + 轻微缩落位（对齐参考视频的手感）。
-    // scale 与 fade 共用同一时长、同一曲线，结束时透明度恰好归零，
-    // 不会有"画面还很大却瞬间消失"的残影。
-    // 进场：从略大（1.06）收拢到 1.0，配合淡入，形成「铺满后落定」的展开感。
-    // fade 与 scale 共用同一时长与曲线，结束时透明度恰好归零，不留残影。
+    // 编辑页进场：「渐渐打开」——真·尺寸+裁剪展开（expandIn），不是缩放。
+    // 用云析同款 M3 Expressive spring（YunXMotion）：200ms 级的尺寸展开 + 更快的淡入。
+    // expandIn 内部走 ChangeSize（尺寸 + 裁剪），画面从中间一小块连续铺满全屏，
+    // 观感即「渐渐打开」；起点取目标尺寸的 40%，既有明显展开感又不过分夸张。
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(tween(editorExpandDuration, easing = editorExpandEasing)) +
-            scaleIn(
-                animationSpec = tween(editorExpandDuration, easing = editorExpandEasing),
-                initialScale = editorEnterScale,
-                transformOrigin = TransformOrigin.Center
+        fadeIn(YunXMotion.enterFade) +
+            expandIn(
+                animationSpec = YunXMotion.enterSpatialSize,
+                initialSize = { IntSize(it.width * 2 / 5, it.height * 2 / 5) },
+                expandFrom = Alignment.Center
             )
     }
     // 退场（返回首页）：与设置页完全一致的水平滑动——编辑页整体向右滑出，

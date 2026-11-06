@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,18 +17,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -41,8 +34,8 @@ import kotlinx.coroutines.launch
  *
  * - **卡片真实滑走**（80% 跟手），让出揭示区；
  * - **圆球钉在屏幕边缘**（左滑→右屏边，右滑→左屏边），从卡片滑开时就地显现；
- * - **不做粘连脖子**（v3.9.4 按反馈移除）：只有圆球，垂直居中对齐卡片行、
- *   内缩 3dp 完整可见；Canvas 画在卡片**下层**，球从卡片边缘「钻出来」；
+ * - 只有一个圆球（deleteIcon 提供，红色实心）；Canvas 不再另画白色圆，
+ *   避免出现「两个球」；球内缩 3dp 完整可见；
  * - 松手不足阈值：卡片低阻尼弹簧 Q 弹回位，圆球以更低阻尼弹簧贴回卡片边缘、
    被回位的卡片自然盖住——两个弹簧独立wobble，产生粘连拖尾手感；
  * - 超过阈值（卡宽 32%）：触发删除（-1 左滑 / +1 右滑），粒子飘散方向沿用。
@@ -52,7 +45,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun LiquidSwipeDelete(
     enabled: Boolean,
-    ballTint: Color,
     deleteIcon: @Composable () -> Unit,
     onConfirmDelete: (direction: Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -155,25 +147,12 @@ fun LiquidSwipeDelete(
                 }
             }
     ) {
-        // 球与脖子画在卡片「下层」：球从卡片边缘钻出来，永远只出现在揭示区
-        if (ballVisible) {
-            Canvas(Modifier.fillMaxSize()) {
-                drawLiquid(
-                    cardShiftX = cardShift.value,
-                    ballCx = ballX.value,
-                    dir = lastDir,
-                    ballRadius = ballRadius,
-                    color = ballTint
-                )
-            }
-        }
-
         // 卡片本体：80% 跟手滑走
         Box(modifier = Modifier.graphicsLayer { translationX = cardShift.value }) {
             content()
         }
 
-        // 删除图标：叠在揭示区的圆球上（与 Canvas 球同一圆心）
+        // 删除图标（唯一的圆球）：钉在揭示区屏幕边缘，随拖动/回弹位移
         if (ballVisible) {
             Box(Modifier.fillMaxSize()) {
                 Box(
@@ -189,21 +168,4 @@ fun LiquidSwipeDelete(
             }
         }
     }
-}
-
-/**
- * 有界液态粘连：脖子从「卡片尾缘」连到「圆球近侧」，两段三次贝塞尔锥形收窄，
- * 接点由圆球圆面盖住。X 全程夹在 [min(边,球), max(边,球)]，不可能越界。
- */
-private fun DrawScope.drawLiquid(
-    cardShiftX: Float,
-    ballCx: Float,
-    dir: Float,
-    ballRadius: Float,
-    color: Color
-) {
-    if (ballCx <= 0f) return
-    val cy = size.height / 2f
-    // 仅圆球：不做粘连脖子。球心垂直居中对齐卡片行。
-    drawCircle(color = color, radius = ballRadius, center = Offset(ballCx, cy), style = Fill)
 }

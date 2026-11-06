@@ -103,9 +103,6 @@ fun NoteCard(
     // 超过阈值触发删除。左滑/右滑双向可用，选择模式下禁用（enabled=false）。
     LiquidSwipeDelete(
         enabled = !selectionMode,
-        // 粘连球体颜色跟随卡片内容色，深色内容用白球、浅色内容用深球
-        ballTint = if (baseColor.isDark()) Color.White.copy(alpha = 0.92f)
-                   else Color(0xFF3C3C44).copy(alpha = 0.92f),
         onConfirmDelete = { direction -> onSwipeDelete(direction) },
         deleteIcon = { DeleteBallIcon() },
         modifier = modifier
@@ -341,8 +338,8 @@ private fun formatDate(timestamp: Long): String {
 }
 
 /**
- * 液态侧滑删除的圆球图标：半透明深色圆底 + 白色垃圾桶，
- * 叠在 Canvas 画的浅色粘连球体上，任何壁纸上都可辨。
+ * 液态侧滑删除的唯一圆球：红色实心圆 + 白色垃圾桶。
+ * 不再叠加 Canvas 白球，避免出现「两个球」。
  */
 @Composable
 private fun DeleteBallIcon() {
@@ -350,7 +347,7 @@ private fun DeleteBallIcon() {
         modifier = Modifier
             .size(44.dp)
             .background(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                color = MaterialTheme.colorScheme.error,
                 shape = CircleShape
             ),
         contentAlignment = Alignment.Center
@@ -358,7 +355,7 @@ private fun DeleteBallIcon() {
         Icon(
             imageVector = Icons.Default.Delete,
             contentDescription = null,
-            tint = Color.White,
+            tint = MaterialTheme.colorScheme.onError,
             modifier = Modifier.size(22.dp)
         )
     }
