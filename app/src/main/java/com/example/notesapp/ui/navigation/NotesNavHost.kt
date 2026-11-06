@@ -5,7 +5,6 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleOut
@@ -19,10 +18,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -97,11 +94,22 @@ fun NotesNavHost(
             fadeIn(tween(duration, easing = sharedEasing))
         }
     }
+    // 打开编辑页时底层首页「更快淡出」（fastEffectsSpec，刚度 3800）：
+    // 与编辑页淡入形成 cross-fade，且底层退得比上层进得快（文档要求约 1/2 时长）。
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        ExitTransition.None
+        if (initialState.destination.route == Screen.Editor.route) {
+            fadeOut(YunXMotion.exitFade)
+        } else {
+            ExitTransition.None
+        }
     }
+    // 关闭编辑页返回时，底层首页用 defaultEffectsSpec（刚度 1600）淡回
     val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        EnterTransition.None
+        if (initialState.destination.route == Screen.Editor.route) {
+            fadeIn(YunXMotion.enterFade)
+        } else {
+            EnterTransition.None
+        }
     }
     val homePopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         ExitTransition.None
@@ -122,25 +130,20 @@ fun NotesNavHost(
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
-    // 编辑页进场：「渐渐打开」——真·尺寸+裁剪展开（expandIn），不是缩放。
-    // 用云析同款 M3 Expressive spring（YunXMotion）：200ms 级的尺寸展开 + 更快的淡入。
-    // expandIn 内部走 ChangeSize（尺寸 + 裁剪），画面从中间一小块连续铺满全屏，
-    // 观感即「渐渐打开」；起点取目标尺寸的 40%，既有明显展开感又不过分夸张。
+    // ===== 编辑页（打开/关闭备忘录）=「设置→关于」同款整屏 cross-fade =====
+    // 依据《设置二级页面-打开动画-改造说明.md》：纯淡入淡出，
+    // **不使用** slideInHorizontally / scaleIn / expandIn，也没有共享元素。
+    // 打开：编辑页 fadeIn(defaultEffectsSpec 刚度 1600)，
+    //       同时底层首页 fadeOut(fastEffectsSpec 刚度 3800，退得更快)；
+    // 关闭：编辑页 fadeOut(tween 300ms, FastOutSlowIn)，
+    //       底层首页 fadeIn(defaultEffectsSpec 刚度 1600) 淡回。
+    // 弹簧 spec 在「动画时长缩放=0」时自动瞬切，无障碍友好。
+    val pageCloseFade = tween<Float>(300, easing = FastOutSlowInEasing)
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(YunXMotion.enterFade) +
-            expandIn(
-                animationSpec = YunXMotion.enterSpatialSize,
-                initialSize = { IntSize(it.width * 2 / 5, it.height * 2 / 5) },
-                expandFrom = Alignment.Center
-            )
+        fadeIn(YunXMotion.enterFade)
     }
-    // 退场（返回首页）：与设置页完全一致的水平滑动——编辑页整体向右滑出，
-    // 首页静止被揭示。此前多版「缩小+淡出」（0.94/0.88 配不同曲线）真机反馈
-    // 始终不理想，改用与二级页相同的滑动退场，观感即「退出设置」的熟悉手感。
-    // 注意与 secondaryPopExit 保持同一 spec：同 duration、同曲线、同方向，
-    // 两类页面退出去的动作完全统一。
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
+        fadeOut(pageCloseFade)
     }
 
     NavHost(
