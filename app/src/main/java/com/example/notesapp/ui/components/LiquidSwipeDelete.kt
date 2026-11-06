@@ -20,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.graphicsLayer
@@ -42,8 +41,8 @@ import kotlinx.coroutines.launch
  *
  * - **卡片真实滑走**（80% 跟手），让出揭示区；
  * - **圆球钉在屏幕边缘**（左滑→右屏边，右滑→左屏边），从卡片滑开时就地显现；
- * - **粘连脖子只在揭示区内**连接卡片尾缘与圆球：拖得越远拉得越长越细，
- *   超过 64dp 撕裂；Canvas 画在卡片**下层**，球从卡片边缘「钻出来」；
+ * - **不做粘连脖子**（v3.9.4 按反馈移除）：只有圆球，垂直居中对齐卡片行、
+ *   内缩 3dp 完整可见；Canvas 画在卡片**下层**，球从卡片边缘「钻出来」；
  * - 松手不足阈值：卡片低阻尼弹簧 Q 弹回位，圆球以更低阻尼弹簧贴回卡片边缘、
    被回位的卡片自然盖住——两个弹簧独立wobble，产生粘连拖尾手感；
  * - 超过阈值（卡宽 32%）：触发删除（-1 左滑 / +1 右滑），粒子飘散方向沿用。
@@ -63,7 +62,6 @@ fun LiquidSwipeDelete(
     val scope = rememberCoroutineScope()
 
     val ballRadius = with(density) { 22.dp.toPx() }
-    val breakDistancePx = with(density) { 64.dp.toPx() }
     val deleteFraction = 0.32f
     val cardFollow = 0.8f
 
@@ -81,7 +79,9 @@ fun LiquidSwipeDelete(
     var cardJob by remember { mutableStateOf<Job?>(null) }
     var ballJob by remember { mutableStateOf<Job?>(null) }
 
-    fun restBallCx(dir: Float) = if (dir < 0f) widthPx - ballRadius else ballRadius
+    val edgeInset = with(density) { 3.dp.toPx() }
+    fun restBallCx(dir: Float) =
+        if (dir < 0f) widthPx - ballRadius - edgeInset else ballRadius + edgeInset
     fun edgeBase(dir: Float) = if (dir < 0f) widthPx else 0f
 
     // 拖动中逐帧：卡片跟手，球钉在屏边
@@ -163,7 +163,6 @@ fun LiquidSwipeDelete(
                     ballCx = ballX.value,
                     dir = lastDir,
                     ballRadius = ballRadius,
-                    breakDistancePx = breakDistancePx,
                     color = ballTint
                 )
             }
@@ -201,39 +200,10 @@ private fun DrawScope.drawLiquid(
     ballCx: Float,
     dir: Float,
     ballRadius: Float,
-    breakDistancePx: Float,
     color: Color
 ) {
     if (ballCx <= 0f) return
     val cy = size.height / 2f
-
-    // 圆球本体（带轻微拉伸：跟手时沿运动方向略扁，更 Q）
+    // 仅圆球：不做粘连脖子。球心垂直居中对齐卡片行。
     drawCircle(color = color, radius = ballRadius, center = Offset(ballCx, cy), style = Fill)
-
-    // 卡片尾缘位置（卡片滑移后）
-    val cardEdgeX = if (dir < 0f) size.width + cardShiftX else 0f + cardShiftX
-    // 球的近侧（朝向卡片）
-    val ballNearX = ballCx - dir * ballRadius
-    // 脖子长度：卡片边到球近侧
-    val gap = abs(ballNearX - cardEdgeX)
-    if (gap < ballRadius * 0.2f || gap >= breakDistancePx) return
-
-    val progress = (gap / breakDistancePx).coerceIn(0f, 1f)
-    val t1 = ballRadius * (0.92f - 0.30f * progress)   // 卡片侧半宽（收窄）
-    val t2 = ballRadius * (0.58f - 0.28f * progress)   // 球侧半宽（由球面盖住）
-
-    val fromX = min(cardEdgeX, ballNearX)
-    val toX = max(cardEdgeX, ballNearX)
-    val span = (toX - fromX).coerceAtLeast(1f)
-    val m1 = fromX + span * 0.35f
-    val m2 = fromX + span * 0.70f
-
-    val neck = Path().apply {
-        moveTo(fromX, cy - t1)
-        cubicTo(m1, cy - t1, m2, cy - t2, toX, cy - t2)
-        lineTo(toX, cy + t2)
-        cubicTo(m2, cy + t2, m1, cy + t1, fromX, cy + t1)
-        close()
-    }
-    drawPath(neck, color, style = Fill)
 }
