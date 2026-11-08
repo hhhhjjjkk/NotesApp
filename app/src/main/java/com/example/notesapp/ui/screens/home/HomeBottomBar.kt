@@ -6,7 +6,6 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -87,11 +86,10 @@ fun HomeBottomBar(
 
     AnimatedVisibility(
         visibleState = visibleState,
-        // 入场：自屏幕底边向上滑入 + 淡入。位移量 = 内容高度，终点 = 布局位置。
-        enter = slideInVertically(
-            animationSpec = tween(350, easing = FastOutSlowInEasing),
-            initialOffsetY = { it }
-        ) + fadeIn(animationSpec = tween(280)),
+        // 入场：纯淡入（v3.10.3 起）。此前 slideInVertically 的起始偏移取内容高度，
+        // 返回首页时父容器还在淡入、底栏高度测量不稳定，偏移会被重映射，
+        // 表现为底部元素反复弹跳。淡入无位移，不可能弹跳，且与整页淡入在同一节奏。
+        enter = fadeIn(animationSpec = tween(280, easing = FastOutSlowInEasing)),
         // 退场（进入多选模式）：向下滑出屏幕底部 —— 底部栏的消失方向就该是下沉。
         exit = slideOutVertically(
             animationSpec = tween(250, easing = FastOutSlowInEasing),

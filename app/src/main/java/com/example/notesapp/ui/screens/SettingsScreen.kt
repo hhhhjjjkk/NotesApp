@@ -53,7 +53,6 @@ import com.example.notesapp.R
 import com.example.notesapp.data.ThemeColor
 import com.example.notesapp.data.ThemeMode
 import com.example.notesapp.ui.theme.toComposeColor
-import com.example.notesapp.ui.components.ExpandableSection
 import com.example.notesapp.ui.components.PreviewCard
 import com.example.notesapp.ui.viewmodel.SettingsViewModel
 
@@ -116,13 +115,9 @@ fun SettingsScreen(
                 shadowEnabled = cardShadow
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // ===== 外观（默认展开）：主题模式 + 主题色 =====
-            ExpandableSection(
-                title = stringResource(R.string.theme),
-                initiallyExpanded = true
-            ) {
+            SettingsSectionTitle(stringResource(R.string.theme))
             ThemeMode.entries.forEach { mode ->
                 Row(
                     modifier = Modifier
@@ -180,15 +175,11 @@ fun SettingsScreen(
                     )
                 }
             }
-            }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // ===== 卡片样式（默认收起）：圆角 / 阴影 / 透明度 =====
-            ExpandableSection(
-                title = "卡片样式",
-                initiallyExpanded = false
-            ) {
             SettingsSectionTitle(stringResource(R.string.card_radius))
             Row(
                 modifier = Modifier
@@ -290,15 +281,11 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp)
             )
-            }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // ===== 动效与背景（默认收起）：动画速度 + 自定义背景图 =====
-            ExpandableSection(
-                title = "动效与背景",
-                initiallyExpanded = false
-            ) {
             // 动画速度：调节页面过渡和滑块动画的快慢
             SettingsSectionTitle(stringResource(R.string.anim_speed))
             var localAnimSpeed by remember(animSpeed) { mutableStateOf(animSpeed) }
@@ -337,7 +324,9 @@ fun SettingsScreen(
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp)
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
 
             // 自定义背景图：从图库选择图片作为全局背景，叠加遮罩保证可读性
             SettingsSectionTitle(stringResource(R.string.custom_background))
@@ -422,7 +411,6 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp, top = 2.dp)
                 )
-            }
             }
         }
     }

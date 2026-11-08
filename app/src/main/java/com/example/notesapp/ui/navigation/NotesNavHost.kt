@@ -7,7 +7,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
@@ -30,7 +29,6 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.example.notesapp.ui.components.YunXMotion
 import com.example.notesapp.ui.screens.EditorScreen
 import com.example.notesapp.ui.screens.HomeScreen
 import com.example.notesapp.ui.screens.SettingsScreen
@@ -85,28 +83,24 @@ fun NotesNavHost(
     // 滑动退场（exitSlideSpec，即普通 duration）严格同 spec；否则首页会先于
     // 编辑页滑完而全亮/或滞后露出半透明页面，出现「双重影像」。
     // 从设置/回收站返回同样用普通 duration，两类页面返回动作已统一。
+    // 首页进场（冷启动）：简单淡入即可
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        if (initialState.destination.route == Screen.Editor.route) {
-            // 与编辑页滑动退场严格同 spec（同 duration、同曲线）：
-            // 首页在被揭示时同步淡入到位，快了慢了都会露出半透明首页
-            fadeIn(tween(duration, easing = sharedEasing))
-        } else {
-            fadeIn(tween(duration, easing = sharedEasing))
-        }
+        fadeIn(tween(duration, easing = sharedEasing))
     }
-    // 打开编辑页时底层首页「更快淡出」（fastEffectsSpec，刚度 3800）：
-    // 与编辑页淡入形成 cross-fade，且底层退得比上层进得快（文档要求约 1/2 时长）。
+    // 打开编辑页时底层首页淡出。用 targetState（去向）判断——
+    // v3.10.2 误用了 initialState，前缀永远命中不了 Editor，导致首页从不淡出。
+    // 淡出要比编辑页淡入更快（约一半时长），形成 cross-fade。
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (initialState.destination.route == Screen.Editor.route) {
-            fadeOut(YunXMotion.exitFade)
+        if (targetState.destination.route == Screen.Editor.route) {
+            fadeOut(tween(180, easing = FastOutSlowInEasing))
         } else {
             ExitTransition.None
         }
     }
-    // 关闭编辑页返回时，底层首页用 defaultEffectsSpec（刚度 1600）淡回
+    // 关闭编辑页返回时首页淡回。用 initialState（离场页）判断是否为编辑页。
     val homePopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         if (initialState.destination.route == Screen.Editor.route) {
-            fadeIn(YunXMotion.enterFade)
+            fadeIn(tween(300, easing = FastOutSlowInEasing))
         } else {
             EnterTransition.None
         }
@@ -130,17 +124,13 @@ fun NotesNavHost(
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
-    // ===== 编辑页（打开/关闭备忘录）=「设置→关于」同款整屏 cross-fade =====
-    // 依据《设置二级页面-打开动画-改造说明.md》：纯淡入淡出，
-    // **不使用** slideInHorizontally / scaleIn / expandIn，也没有共享元素。
-    // 打开：编辑页 fadeIn(defaultEffectsSpec 刚度 1600)，
-    //       同时底层首页 fadeOut(fastEffectsSpec 刚度 3800，退得更快)；
-    // 关闭：编辑页 fadeOut(tween 300ms, FastOutSlowIn)，
-    //       底层首页 fadeIn(defaultEffectsSpec 刚度 1600) 淡回。
-    // 弹簧 spec 在「动画时长缩放=0」时自动瞬切，无障碍友好。
+    // ===== 编辑页（打开/关闭备忘录）：整屏 cross-fade，纯淡入淡出 =====
+    // 注意：不要用 spring(1.0, 1600) 做淡入——它约 0.16s 就到位，真机上几乎
+    // 看不到动画（v3.10.2 用户反馈「每次进入根本没动画」）。改用可见时长：
+    // 进入 380ms 淡入，关闭 300ms 淡出。
     val pageCloseFade = tween<Float>(300, easing = FastOutSlowInEasing)
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(YunXMotion.enterFade)
+        fadeIn(tween(380, easing = FastOutSlowInEasing))
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         fadeOut(pageCloseFade)
@@ -162,31 +152,26 @@ fun NotesNavHost(
             // 作为 replayKey 通知 HomeScreen 重播底部栏的上浮入场动画。
             // 之所以不用 entry.id：它在同一次返回栈条目中恒定不变，无法反映"回来了"。
             //
-            // ⚠️ 关键去重（v3.7.4，勿删）：LifecycleRegistry 在 addObserver 时，
-            // 若目标 lifecycle 已是 RESUMED，会**立刻补发一次 ON_RESUME**。
-            // 而本 observer 会随转场期间 LocalLifecycleOwner 变化而被反复重新注册
-            // → 一次返回会补发多次 → homeResumeCount 多跳几次 → 底栏入场动画
-            // 被连续重播多次，正是用户反馈「底栏一直向上飞、冲过屏顶」的真正成因。
-            //
-            // 解法：homeResumed 放在 composition 级 remember 里（不是 DisposableEffect
-            // 的局部变量），这样 observer 重新注册时标志位依然有效：
-            // 只有「从非 RESUMED 变为 RESUMED」才计数，补发的那次会被忽略。
+            // ⚠️ 关键去重（勿删）：LifecycleRegistry 在 addObserver 时，若目标 lifecycle
+            // 已是 RESUMED，会**立刻补发一次 ON_RESUME**；而本 observer 会随转场期间
+            // LocalLifecycleOwner 变化被反复重新注册 → 一次返回可补发多次 →
+            // homeResumeCount 多跳 → 底栏入场动画被连续重播（v3.7.0「一直向上飞」成因）。
+            // 单靠 homeResumed 布尔标志不够：重注册过程中夹杂的 ON_PAUSE 会把它清掉。
+            // 因此用时间戳防抖：1 秒内多次 ON_RESUME 只计数一次。
             var homeResumeCount by remember(homeEntry) { mutableIntStateOf(0) }
-            var homeResumed by remember(homeEntry) { mutableStateOf(false) }
+            // 时间戳防抖：转场期间 owner 切换会反复补发 ON_RESUME 且中间夹 ON_PAUSE，
+            // 单靠 homeResumed 标志挡不住（标志会被 PAUSE 清掉）。
+            // 1 秒内只计数一次，保证一次返回最多重播一次底栏动画。
+            var lastResumeAt by remember(homeEntry) { mutableStateOf(0L) }
             val lifecycleOwner = LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
-                    when (event) {
-                        Lifecycle.Event.ON_RESUME -> {
-                            if (!homeResumed) {
-                                homeResumed = true
-                                homeResumeCount++
-                            }
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastResumeAt >= 1000L) {
+                            lastResumeAt = now
+                            homeResumeCount++
                         }
-                        Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                            homeResumed = false
-                        }
-                        else -> Unit
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
