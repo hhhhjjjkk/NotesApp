@@ -63,4 +63,4 @@ app/src/main/java/com/example/notesapp/
 
 ## License
 
-MIT
+[MIT](LICENSE)
