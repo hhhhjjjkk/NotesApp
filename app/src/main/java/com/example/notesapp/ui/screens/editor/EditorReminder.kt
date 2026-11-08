@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -146,7 +147,13 @@ class EditorReminderController internal constructor(
 @Composable
 fun rememberEditorReminder(state: EditorState): EditorReminderController {
     val context = LocalContext.current
-    val controller = EditorReminderController(state, context)
+    // ⚠️ 必须 remember：控制器持有 datePickerTrigger、showTimePicker、pickedYear/Month/Day
+    // 等跨重组状态。若每组合一次都 new 一个，点闹钟后触发器自增，下一次重组立刻换上
+    // 新对象（全部归零），LaunchedEffect 的 key 永远不变 → 日期选择器永不弹出，
+    // 时间选择器 showTimePicker 同理。这正是「提醒功能用不了」的根因。
+    // state 是 @Stable 的 EditorState 实例、context 是 Activity，二者都不变，
+    // 因此 remember 的 key 不会失效。
+    val controller = remember(state, context) { EditorReminderController(state, context) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
