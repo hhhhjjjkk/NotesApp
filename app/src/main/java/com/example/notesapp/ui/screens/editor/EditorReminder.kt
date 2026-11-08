@@ -1,9 +1,14 @@
 package com.example.notesapp.ui.screens.editor
 
 import android.Manifest
+import android.app.AlarmManager
 import android.app.DatePickerDialog
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -93,8 +98,28 @@ class EditorReminderController internal constructor(
         val launcher = permissionLauncher
         if (state.reminderAt > 0L) {
             state.reminderAt = 0L
-        } else if (launcher != null) {
-            requestNotificationPermissionAndOpenPicker(launcher)
+        } else {
+            // Android 12+ 精确闹钟权限：未授予时先引导申请，否则提醒只能走
+            // 非精确调度（可能延迟数分钟，用户会以为「提醒不准」）。
+            requestExactAlarmPermissionIfNeeded()
+            if (launcher != null) {
+                requestNotificationPermissionAndOpenPicker(launcher)
+            }
+        }
+    }
+
+    /** 未授予精确闹钟权限时打开系统申请页；已授予则无操作。 */
+    private fun requestExactAlarmPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        if (am.canScheduleExactAlarms()) return
+        runCatching {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:" + context.packageName)
+                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            )
         }
     }
 
@@ -181,7 +206,12 @@ fun rememberEditorReminder(state: EditorState): EditorReminderController {
 
 /** 提醒状态显示行：紧跟标题下方，展示已设置的提醒时间，并提供一键取消。 */
 @Composable
-fun ReminderBanner(state: EditorState, modifier: Modifier = Modifier) {
+fun ReminderBanner(
+    state: EditorState,
+    modifier: Modifier = Modifier,
+    /** 取消回调：调用方除清状态外，还要撤销已调度的闹钟（只清状态的话杀进程后仍会响） */
+    onCancel: () -> Unit = {}
+) {
     if (state.reminderAt <= 0L) return
     val reminderText = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
         .format(Date(state.reminderAt))
@@ -210,7 +240,7 @@ fun ReminderBanner(state: EditorState, modifier: Modifier = Modifier) {
             text = "取消",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.clickable { state.reminderAt = 0L }
+            modifier = Modifier.clickable { onCancel() }
         )
     }
 }

@@ -61,6 +61,8 @@ fun LiquidSwipeDelete(
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     var lastDir by remember { mutableFloatStateOf(-1f) }
+    // 方向在手势开始后首次显著移动时锁定：中途反向不再跳到屏幕另一边
+    var lockedDir by remember { mutableFloatStateOf(0f) }
     var ballVisible by remember { mutableStateOf(false) }
 
     // 卡片位移；球心 X 绝对坐标；图标透明度
@@ -81,7 +83,8 @@ fun LiquidSwipeDelete(
         if (dragging) {
             cardShift.snapTo(dragX * cardFollow)
             if (abs(dragX) > 4f) {
-                lastDir = if (dragX < 0f) -1f else 1f
+                if (lockedDir == 0f) lockedDir = if (dragX < 0f) -1f else 1f
+                lastDir = lockedDir
                 ballX.snapTo(restBallCx(lastDir))
                 ballVisible = true
                 iconAlpha.snapTo(1f)
@@ -93,7 +96,8 @@ fun LiquidSwipeDelete(
         if (!dragging) return
         dragging = false
         val travelled = abs(dragX)
-        val dir = lastDir
+        val dir = if (lockedDir != 0f) lockedDir else lastDir
+        lockedDir = 0f
         if (travelled >= widthPx * deleteFraction) {
             // 删除：状态复位，回调交由列表移除本卡片（粒子在 HomeScreen 侧）
             dragX = 0f
@@ -118,10 +122,14 @@ fun LiquidSwipeDelete(
                     spring(dampingRatio = 0.36f, stiffness = Spring.StiffnessMedium)
                 )
             }
+            val doneCard = cardJob
+            val doneBall = ballJob
             scope.launch {
-                cardJob?.join()
+                // 两个弹簧都跑完再隐藏圆球，避免 ballJob 还在跑时视觉跳变
+                doneCard?.join()
+                doneBall?.join()
+                iconAlpha.snapTo(0f)
                 ballVisible = false
-                iconAlpha.animateTo(0f, tween(120))
                 ballX.snapTo(0f)
             }
         }
@@ -138,6 +146,7 @@ fun LiquidSwipeDelete(
                         ballJob?.cancel()
                         dragging = true
                         dragX = 0f
+                        lockedDir = 0f
                     },
                     onDragEnd = { release() },
                     onDragCancel = { release() }

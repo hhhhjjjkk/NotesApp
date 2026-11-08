@@ -20,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.notesapp.NotesApplication
 import com.example.notesapp.R
+import com.example.notesapp.notification.NotificationScheduler
 import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.ui.components.RichDocumentEditor
@@ -164,7 +165,15 @@ fun EditorScreen(
                     onRestored = { save.saveAndExit(currentType) }
                 )
 
-                ReminderBanner(state = state)
+                ReminderBanner(
+                    state = state,
+                    onCancel = {
+                        // 已调度的闹钟必须同步撤销：只清 reminderAt 的话，
+                        // 杀进程后闹钟仍会触发并弹出已取消的提醒。
+                        if (noteId > 0L) NotificationScheduler.cancel(context, noteId)
+                        state.reminderAt = 0L
+                    }
+                )
 
                 RichDocumentEditor(
                     blocks = state.blocks,
@@ -197,7 +206,13 @@ fun EditorScreen(
                 onColorSelected = { state.selectedColor = it },
                 onInsertImage = { imagePicker.requestInsert(imageLauncher, state.blocks.size) },
                 hasReminder = state.reminderAt > 0L,
-                onAlarmClick = { reminder.onAlarmClicked() },
+                onAlarmClick = {
+                    // 再次点击 = 取消：先撤销已调度闹钟，再走控制器的取消逻辑
+                    if (state.reminderAt > 0L && noteId > 0L) {
+                        NotificationScheduler.cancel(context, noteId)
+                    }
+                    reminder.onAlarmClicked()
+                },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
