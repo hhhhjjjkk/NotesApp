@@ -6,6 +6,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -18,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -92,7 +94,8 @@ fun NotesNavHost(
     // 淡出要比编辑页淡入更快（约一半时长），形成 cross-fade。
     val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         if (targetState.destination.route == Screen.Editor.route) {
-            fadeOut(tween(180, easing = FastOutSlowInEasing))
+            // 底层比上层稍快退场，形成可辨认的交叉淡化（云析同款：底层 fastEffects）
+            fadeOut(tween((duration * 0.7f).toInt().coerceIn(120, 320), easing = FastOutSlowInEasing))
         } else {
             ExitTransition.None
         }
@@ -124,13 +127,21 @@ fun NotesNavHost(
     val secondaryPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         slideOutHorizontally(exitSlideSpec()) { fullWidth -> fullWidth }
     }
-    // ===== 编辑页（打开/关闭备忘录）：整屏 cross-fade，纯淡入淡出 =====
-    // 注意：不要用 spring(1.0, 1600) 做淡入——它约 0.16s 就到位，真机上几乎
-    // 看不到动画（v3.10.2 用户反馈「每次进入根本没动画」）。改用可见时长：
-    // 进入 380ms 淡入，关闭 300ms 淡出。
+    // ===== 编辑页（打开/关闭备忘录）=====
+    // ⚠️ 为什么纯淡入看不见（v3.10.2/v3.10.3 用户连续反馈「打开没动画」）：
+    // 首页与编辑页的 Scaffold 背景色是**同一个** colorScheme.background，
+    // 淡入时底下透出来的还是同色背景 —— 纯 alpha 变化在视觉上等于「什么都没发生」。
+    // 所以进场必须带**真实的空间变化**：轻微缩放（0.92 → 1.0）+ 淡入。
+    // 缩放过程中编辑页边缘会露出底层首页内容，动画必然可辨。
+    // 时长跟随设置里的「动画速度」（duration = 150~450ms）。
     val pageCloseFade = tween<Float>(300, easing = FastOutSlowInEasing)
     val editorEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(tween(380, easing = FastOutSlowInEasing))
+        fadeIn(tween(duration, easing = sharedEasing)) +
+            scaleIn(
+                animationSpec = tween((duration + 60).coerceAtMost(520), easing = sharedEasing),
+                initialScale = 0.92f,
+                transformOrigin = TransformOrigin.Center
+            )
     }
     val editorPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         fadeOut(pageCloseFade)

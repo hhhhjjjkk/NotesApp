@@ -38,6 +38,7 @@ import com.example.notesapp.ui.theme.isDarkColor
 import com.example.notesapp.ui.viewmodel.NotesViewModel
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 
 /**
  * 编辑页。
@@ -108,8 +109,13 @@ fun EditorScreen(
     }
 
     // 新建笔记时自动聚焦正文（交给编辑器按 focusBlockId 挂载并聚焦）
+    //
+    // ⚠️ 必须等转场结束再聚焦（v3.10.6）：转场期间弹键盘会立刻改变 imePadding，
+    // 整页内容同时上移 + 键盘弹出，把打开动画彻底盖掉——用户看到的只有「页面乱跳」，
+    // 表现为「打开根本没有动画」。延后到转场时长之后再聚焦，两者互不干扰。
     LaunchedEffect(Unit) {
         if (noteId == 0L) {
+            delay(520)
             state.focusBlockId = state.blocks.firstOrNull()?.id
         }
     }
