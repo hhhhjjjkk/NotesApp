@@ -26,6 +26,9 @@ import kotlin.math.abs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+/** 圆球淡入/淡出时长（ms）：出现与消失对称。 */
+private const val BALL_FADE_MS = 160
+
 /**
  * 液态侧滑删除 v2（v3.9.3 重写交互模型）。
  *
@@ -79,6 +82,10 @@ fun LiquidSwipeDelete(
     fun edgeBase(dir: Float) = if (dir < 0f) widthPx else 0f
 
     // 拖动中逐帧：卡片跟手，球钉在屏边
+    //
+    // ⚠️ 圆球「出现」必须与「消失」对称（v3.11.1）：消失是 alpha 淡出，
+    // 此前出现却用 snapTo(1f) 瞬间显示——滑动时红球「啪」地蹦出来，
+    // 与松手时的柔和淡出观感割裂。现在改为同参数的淡入。
     LaunchedEffect(dragX, dragging) {
         if (dragging) {
             cardShift.snapTo(dragX * cardFollow)
@@ -87,7 +94,10 @@ fun LiquidSwipeDelete(
                 lastDir = lockedDir
                 ballX.snapTo(restBallCx(lastDir))
                 ballVisible = true
-                iconAlpha.snapTo(1f)
+                // 只在「首次出现」时启动淡入，后续每帧不重复启动
+                if (iconAlpha.value < 1f) {
+                    iconAlpha.animateTo(1f, tween(BALL_FADE_MS))
+                }
             }
         }
     }
@@ -123,7 +133,7 @@ fun LiquidSwipeDelete(
                     spring(dampingRatio = 0.8f, stiffness = 380f)
                 )
             }
-            scope.launch { iconAlpha.animateTo(0f, tween(160)) }
+            scope.launch { iconAlpha.animateTo(0f, tween(BALL_FADE_MS)) }
             val doneCard = cardJob
             val doneBall = ballJob
             scope.launch {
