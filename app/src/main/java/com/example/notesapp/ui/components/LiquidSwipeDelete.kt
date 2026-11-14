@@ -108,27 +108,27 @@ fun LiquidSwipeDelete(
             }
             onConfirmDelete(dir.toInt())
         } else {
-            // Q 弹回：卡片与圆球各自弹簧（不同阻尼 → 独立 wobble = 粘连拖尾）
+            // Q 弹回。⚠️ 圆球必须与卡片同步淡出（v3.11.0）：此前等两个低刚度弹簧
+            // 都收敛才隐藏（>1s），用户看到的是「卡片回位了、红球还挂在屏幕边」。
+            // 现在圆球跟随卡片同一时长淡出，球本体同时弹回边缘。
             cardJob = scope.launch {
                 cardShift.animateTo(
                     0f,
-                    spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
+                    spring(dampingRatio = 0.8f, stiffness = 380f)
                 )
             }
             ballJob = scope.launch {
-                // 球贴回卡片边缘外侧 0.35r 处；卡片归位后被卡片盖住
                 ballX.animateTo(
                     edgeBase(dir) - dir * 0.35f * ballRadius,
-                    spring(dampingRatio = 0.36f, stiffness = Spring.StiffnessMedium)
+                    spring(dampingRatio = 0.8f, stiffness = 380f)
                 )
             }
+            scope.launch { iconAlpha.animateTo(0f, tween(160)) }
             val doneCard = cardJob
             val doneBall = ballJob
             scope.launch {
-                // 两个弹簧都跑完再隐藏圆球，避免 ballJob 还在跑时视觉跳变
                 doneCard?.join()
                 doneBall?.join()
-                iconAlpha.snapTo(0f)
                 ballVisible = false
                 ballX.snapTo(0f)
             }

@@ -122,6 +122,11 @@ fun NoteCard(
                 .liquidGlassSurface(
                     shape = shape,
                     isDark = isDark,
+                    // 卡片透明度（设置里可调，0=不透明，1=最大透明）：
+                    // 用主题背景色做 tint，把玻璃表面往背景色方向拉——
+                    // transparency 越大卡片遮盖力越低，自定义壁纸越透出来。
+                    // （liquidGlassSurface 只有 tint 参数可承载这个语义）
+                    tint = MaterialTheme.colorScheme.background.copy(alpha = transparency),
                     borderWidth = 0.dp,
                     highlight = 0f
                 )
