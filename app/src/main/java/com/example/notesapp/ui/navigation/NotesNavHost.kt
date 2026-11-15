@@ -11,19 +11,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -73,19 +67,12 @@ fun NotesNavHost(
     val exitSlideSpec = { tween<IntOffset>(duration, easing = sharedEasing) }
     val exitFadeSpec = { tween<Float>(fadeDuration, easing = sharedEasing) }
 
-    // 首页：保持「不移动、被覆盖 / 被揭开」——不要把首页整体卷进缩放/淡出过渡。
-    // ⚠️ 踩坑记录（勿删）：v3.7.0 曾给首页加 scaleIn/scaleOut 做"旧页轻缩"，随后用户
-    // 反馈"从编辑页返回时底部滑块的上浮动画一直向上飞、落不到位"。把首页侧恢复为
-    // None（即 v3.6.9 已确认正常的配置）后即修复。
-    // 具体机制属「版本相关、尚未真机验证」：首页整体缩放会与底栏 350ms 的
-    // slideInVertically(initialOffsetY = { it }) 在父级变换未收敛时争夺落点；
-    // 另有 LifecycleRegistry.addObserver 对已 RESUMED 的 entry 补发 ON_RESUME 的路径，
-    // 会让 homeResumeCount 额外自增一次。两条都需要真机 log 才能定论，故不写死是其一。
-    // 交叉淡化时长对齐（勿删）：从编辑页返回首页时，首页淡入必须与编辑页
-    // 滑动退场（exitSlideSpec，即普通 duration）严格同 spec；否则首页会先于
-    // 编辑页滑完而全亮/或滞后露出半透明页面，出现「双重影像」。
-    // 从设置/回收站返回同样用普通 duration，两类页面返回动作已统一。
-    // 首页进场（冷启动）：简单淡入即可
+    // 首页：不移动、被覆盖 / 被揭开——不要给首页整体加缩放或位移。
+    // ⚠️ 踩坑记录（勿删）：v3.7.0 给首页加过 scaleIn/scaleOut 做「旧页轻缩」，
+    // 用户随即反馈底部滑块上浮动画异常；恢复为 None 后正常。
+    // 现在底栏已彻底移除重播机制（v3.11.2），首页侧更没有理由再做整体变换。
+    // 首页只在「打开编辑页」时淡出（配合编辑页进场），
+    // 「返回首页」时由 homePopEnter 淡回，与编辑页淡出交叉。
     val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         fadeIn(tween(duration, easing = sharedEasing))
     }
@@ -158,41 +145,10 @@ fun NotesNavHost(
             exitTransition = homeExit,
             popEnterTransition = homePopEnter,
             popExitTransition = homePopExit
-        ) { homeEntry ->
-            // 每当首页重新回到 RESUMED（冷启动、或从编辑/设置/回收站返回）就自增，
-            // 作为 replayKey 通知 HomeScreen 重播底部栏的上浮入场动画。
-            // 之所以不用 entry.id：它在同一次返回栈条目中恒定不变，无法反映"回来了"。
-            //
-            // ⚠️ 关键去重（勿删）：LifecycleRegistry 在 addObserver 时，若目标 lifecycle
-            // 已是 RESUMED，会**立刻补发一次 ON_RESUME**；而本 observer 会随转场期间
-            // LocalLifecycleOwner 变化被反复重新注册 → 一次返回可补发多次 →
-            // homeResumeCount 多跳 → 底栏入场动画被连续重播（v3.7.0「一直向上飞」成因）。
-            // 单靠 homeResumed 布尔标志不够：重注册过程中夹杂的 ON_PAUSE 会把它清掉。
-            // 因此用时间戳防抖：1 秒内多次 ON_RESUME 只计数一次。
-            var homeResumeCount by remember(homeEntry) { mutableIntStateOf(0) }
-            // 时间戳防抖：转场期间 owner 切换会反复补发 ON_RESUME 且中间夹 ON_PAUSE，
-            // 单靠 homeResumed 标志挡不住（标志会被 PAUSE 清掉）。
-            // 1 秒内只计数一次，保证一次返回最多重播一次底栏动画。
-            var lastResumeAt by remember(homeEntry) { mutableStateOf(0L) }
-            val lifecycleOwner = LocalLifecycleOwner.current
-            DisposableEffect(lifecycleOwner) {
-                val observer = LifecycleEventObserver { _, event ->
-                    if (event == Lifecycle.Event.ON_RESUME) {
-                        val now = System.currentTimeMillis()
-                        if (now - lastResumeAt >= 1000L) {
-                            lastResumeAt = now
-                            homeResumeCount++
-                        }
-                    }
-                }
-                lifecycleOwner.lifecycle.addObserver(observer)
-                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-            }
-
+        ) {
             HomeScreen(
                 viewModel = notesViewModel,
                 settingsViewModel = settingsViewModel,
-                replayKey = homeResumeCount,
                 onNoteClick = { noteId ->
                     navController.navigate(Screen.Editor.createRoute(noteId))
                 },

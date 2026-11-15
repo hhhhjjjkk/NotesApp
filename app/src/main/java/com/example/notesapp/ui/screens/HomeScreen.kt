@@ -93,9 +93,7 @@ fun HomeScreen(
     onNoteClick: (Long) -> Unit,
     onAddClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onTrashClick: () -> Unit,
-    /** 每次「重新回到首页」时该值应变化，用于重播底部滑块上浮动画（详见 HomeBottomBar）。 */
-    replayKey: Any? = Unit
+    onTrashClick: () -> Unit
 ) {
     val context = LocalContext.current
     val notes by viewModel.notes.collectAsStateWithLifecycle()
@@ -122,13 +120,14 @@ fun HomeScreen(
     // 长按选中的笔记，用于底部弹窗
     var sheetNote by remember { mutableStateOf<Note?>(null) }
 
-    // 底部栏入场动画状态。
-    // ⚠️ 必须以 replayKey 为 key：从二级页返回首页时 composition 被保留，
-    // 若状态不重建，AnimatedVisibility 的 targetState 自始没变过 → 不会播 enter。
-    // 以 replayKey 重建后得到一个初始为 false 的 TransitionState，
-    // HomeBottomBar 再把 targetState 推为 true，形成真实的 false→true，
-    // 由 Compose 原生播放「自屏幕底边向上滑入」的入场动画（不会先播下滑的 exit）。
-    val bottomBarVisible = remember(replayKey) { MutableTransitionState(false) }
+    // 底部栏显隐状态（只管多选模式的进/出）。
+    //
+    // ⚠️ 不要再用 remember(replayKey) 之类的 key 重建（v3.11.2 移除）：
+    // 返回首页时重建会把 TransitionState 打回 false → 底栏先**瞬间消失**，
+    // 再叠加首页整体的 homePopEnter 淡入与底栏自己的 fadeIn，
+    // 同一次返回被淡入两遍，观感就是「底部滑块和 + 按钮闪一下」。
+    // 底栏是常驻元素，返回时本就不该重播任何入场动画。
+    val bottomBarVisible = remember { MutableTransitionState(true) }
 
     // ===== 删除时的粒子飘散（参考系统通知消散效果）=====
     // cardBounds：每张卡片在 root 坐标系中的矩形，删除时据此确定粒子爆发的区域。
@@ -343,7 +342,6 @@ fun HomeScreen(
             // 底部滑块 + 添加按钮（动画重播逻辑见 HomeBottomBar 的踩坑注释）
             HomeBottomBar(
                 visibleState = bottomBarVisible,
-                replayKey = replayKey,
                 selectionMode = selectionMode,
                 noteType = noteType,
                 onNoteTypeChange = { viewModel.setNoteType(it) },

@@ -35,42 +35,20 @@ import com.example.notesapp.ui.theme.rememberPressableGlassScale
 /**
  * 底部栏：「备忘录/代办」切换滑块 + 新建按钮。
  *
- * ## 入场动画机制（v3.7.4 重修，勿退回旧写法）
+ * ## 显隐策略（v3.11.2 定案，勿再加「返回首页重播」）
+ * 底栏是**常驻元素**：只在进入/退出多选模式时淡入淡出，返回首页时不播任何动画。
  *
- * ### 为什么用 Compose 原生 AnimatedVisibility，而不是手动 graphicsLayer 位移
- * v3.7.2 曾用 `Animatable` 手动驱动 `graphicsLayer.translationY` 做「上浮」：
- * ```
- * floatProgress.snapTo(0f)        // ← 元凶：瞬间把底栏压到下方 200dp 并 alpha=0
- * floatProgress.animateTo(1f)    // ← 再从屏幕深处往上冲回就位
- * ```
- * `snapTo(0)` 产生了一次「向下一沉 + 瞬间消失」的跳变，紧接着 `animateTo` 从
- * 屏幕下方深处往上冲，两段运动方向相反，视觉上就是「先向下滑动、再往上冲」，
- * 观感完全反直觉（v3.7.0/v3.7.1/v3.7.3 用户真机反复反馈「向上飞/冲过屏顶」）。
- *
- * 现在改为**完全交给 Compose 原生过渡**：
- * - 动画由 AnimatedVisibility 在 false→true 时自动播放 `slideInVertically`，
- *   位移量恒等于「内容自身高度」，终点就是布局位置，**由动画系统保证不会越界**；
- * - 不再有任何 snapTo / 瞬移，底栏只会「从屏幕底边向上滑入就位」，方向唯一且明确。
- *
- * ### 如何在「从二级页返回首页」时重播入场动画
- * Compose Navigation 从二级页返回时 HomeScreen 的 composition 是「被保留」的，
- * AnimatedVisibility 的 targetState 自始至终没有变化，因此不会自动播放 enter。
- *
- * 做法：HomeScreen 用 `remember(replayKey) { MutableTransitionState(false) }`——
- * replayKey 变化时**重建**一个初始为 false 的 TransitionState，
- * 于是形成一次真实的 false→true 变化，AnimatedVisibility 自动播放 enter。
- * 相比旧版「把 targetState 压回 false 再推回 true」的翻转做法，本方案
- * **不会先播一段下滑的 exit**，也就没有「向下滑」的那一下。
- *
- * ⚠️ 前提：replayKey 每次返回必须**只变化一次**。ON_RESUME 观察者在转场期间
- * 被重新注册时，LifecycleRegistry 会给已 RESUMED 的 entry 补发一次 ON_RESUME，
- * 会让计数多跳一次 → 底栏连续重播两次（v3.7.0「一直向上飞」的真正成因）。
- * 该去重逻辑在 NotesNavHost 的 homeResumeCount 处实现，勿删。
+ * 历史踩坑（别再走回头路）：
+ * - v3.3~v3.7.3 用 replayKey 翻转 targetState 重播，触发源不稳定（ON_RESUME 补发）
+ *   导致重复重播，用户反馈「底栏一直向上飞、冲过屏顶」；
+ * - v3.7.4 改成 remember(replayKey) 重建 TransitionState，虽然不再翻转，
+ *   但重建会先打回 false（瞬间消失）→ 再淡入，与首页 homePopEnter 的淡入
+ *   叠加成双重淡入，用户反馈「退出备忘录时底部滑块和 + 按钮会闪」。
+ * - 结论：底栏不需要「返回时重播」这个需求本身。删掉即根治。
  */
 @Composable
 fun HomeBottomBar(
     visibleState: MutableTransitionState<Boolean>,
-    replayKey: Any?,
     selectionMode: Boolean,
     noteType: Int,
     onNoteTypeChange: (Int) -> Unit,
@@ -78,9 +56,10 @@ fun HomeBottomBar(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LaunchedEffect(replayKey, selectionMode) {
-        // 显隐只跟随多选模式；返回首页时的重播由 HomeScreen 重建 TransitionState
-        // 触发（见文件头注释），这里不再做「翻转」那套会播下滑 exit 的操作。
+    // 显隐只跟随多选模式。返回首页（replayKey 变化）不再触发任何重播——
+    // 底栏是常驻元素，重播会与首页的 homePopEnter 淡入叠加成双重淡入，
+    // 表现为「底部滑块与 + 按钮闪一下」。
+    LaunchedEffect(selectionMode) {
         visibleState.targetState = !selectionMode
     }
 
