@@ -29,11 +29,35 @@ class EditorSaveController(
     private val noteId: Long,
     private val onBack: () -> Unit
 ) {
+    /**
+     * 内容是否与打开时不同。
+     *
+     * ⚠️ 为什么需要这个判断（v3.11.3）：此前 buildNote **无条件**写入
+     * `updatedAt = now`，而首页按 `isPinned DESC, updatedAt DESC` 排序——
+     * 于是**仅仅打开看一眼再退出**也会把这张卡片刷新到列表最顶部，
+     * 触发 `animateItemPlacement()` 的垂直位移动画（用户看到的「上浮」）。
+     * 而如果被打开的恰好是列表第一张，位置没变、没有位移，
+     * 就「没有上浮动画」——这正是「有时有有时没有」的成因。
+     */
+    private fun contentChanged(): Boolean {
+        val existing = existingNote ?: return true
+        val encoded = com.example.notesapp.data.RichDocumentCodec.encode(state.blocks)
+        return existing.title != state.title.trim() ||
+            existing.content != state.content ||
+            existing.richContent != encoded ||
+            existing.color != state.selectedColor ||
+            existing.isPinned != state.isPinned ||
+            existing.reminderAt != state.reminderAt
+    }
+
     /** 构建要保存的 Note。 */
     fun buildNote(currentType: Int): Note {
         // 新建笔记时按首页当前选中的类型（备忘录/代办）创建
         // 即使 existingNote 在编辑期间被外部回收，也保留 noteId，避免退化为新建
         val base = existingNote ?: Note(id = noteId, type = currentType)
+        // 内容没变就保留原 updatedAt：不刷新排序，退出时列表位置不变，
+        // 也就不会播放「上浮到顶部」的位移动画。
+        val stamp = if (contentChanged()) System.currentTimeMillis() else base.updatedAt
         return base.copy(
             title = state.title.trim(),
             content = state.content,
@@ -42,7 +66,7 @@ class EditorSaveController(
             isPinned = state.isPinned,
             type = base.type,
             reminderAt = state.reminderAt,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = stamp
         )
     }
 

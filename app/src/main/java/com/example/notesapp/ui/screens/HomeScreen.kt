@@ -283,10 +283,15 @@ fun HomeScreen(
                     items(notes, key = { it.id }) { note ->
                         // 用一层 Box 记录卡片位置（不改 NoteCard 本体），
                         // 删除时据此在卡片原位置生成粒子飘散。
-                        // animateItemPlacement 必须挂在列表直接子项上，故放在此处。
                         Box(
                             modifier = Modifier
-                                .animateItemPlacement()
+                                // ⚠️ 不再使用 animateItemPlacement()（v3.11.3）：
+                                // 列表按 isPinned/updatedAt 排序，退出编辑保存后卡片会
+                                // 换位，该修饰符会把换位播成**垂直上浮**动画；若被打开的
+                                // 恰好是第一张则位置不变、没有动画——用户看到的
+                                // 「退出备忘录有时有上浮动画有时没有」正是它。
+                                // 排序语义保留（编辑后置顶），但换位改为即时生效，
+                                // 退出时的视觉表现恒定：没有任何额外位移动画。
                                 .onGloballyPositioned { coords ->
                                     val pos = coords.positionInRoot()
                                     cardBounds[note.id] = Rect(
@@ -331,7 +336,6 @@ fun HomeScreen(
                                         direction = 0
                                     )
                                 },
-                                // animateItemPlacement 已移到外层 Box（列表直接子项）
                                 modifier = Modifier
                             )
                         }
