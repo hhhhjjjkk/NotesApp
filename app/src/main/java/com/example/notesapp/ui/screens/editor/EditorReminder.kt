@@ -4,11 +4,8 @@ import android.Manifest
 import android.app.AlarmManager
 import android.app.DatePickerDialog
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -98,29 +95,35 @@ class EditorReminderController internal constructor(
         val launcher = permissionLauncher
         if (state.reminderAt > 0L) {
             state.reminderAt = 0L
-        } else {
-            // Android 12+ 精确闹钟权限：未授予时先引导申请，否则提醒只能走
-            // 非精确调度（可能延迟数分钟，用户会以为「提醒不准」）。
-            requestExactAlarmPermissionIfNeeded()
-            if (launcher != null) {
-                requestNotificationPermissionAndOpenPicker(launcher)
-            }
+        } else if (launcher != null) {
+            requestNotificationPermissionAndOpenPicker(launcher)
         }
     }
 
-    /** 未授予精确闹钟权限时打开系统申请页；已授予则无操作。 */
-    private fun requestExactAlarmPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        if (am.canScheduleExactAlarms()) return
-        runCatching {
-            context.startActivity(
-                Intent(
-                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                    Uri.parse("package:" + context.packageName)
-                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            )
-        }
+    /**
+     * 提醒设置成功后，若未授予精确闹钟权限则提示一次。
+     *
+     * ⚠️ 绝不能把这个跳转放在 onAlarmClicked 里（v3.10.5 的回归）：
+     * startActivity 跳到系统设置页会**立刻把本应用切到后台**，
+     * 紧随其后的系统通知权限框、DatePickerDialog 全部不会显示；
+     * 用户从设置页返回时 datePickerTrigger 已被消耗，于是「点了没反应」。
+     * 现在改为：提醒本身照常设置成功（降级为非精确闹钟仍会响），
+     * 只在设置完成后提示一次「可能不准时」。
+     */
+    private fun exactAlarmDegraded(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
+        return runCatching { !am.canScheduleExactAlarms() }.getOrDefault(false)
+    }
+
+    /** 提醒已设置后调用：精确闹钟权限缺失时提示可用性降级。 */
+    private fun notifyIfInexact() {
+        if (!exactAlarmDegraded()) return
+        Toast.makeText(
+            context,
+            context.getString(R.string.reminder_inexact_hint),
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     /** 权限授予结果。 */
@@ -152,6 +155,8 @@ class EditorReminderController internal constructor(
         val target = c.timeInMillis
         if (target > System.currentTimeMillis()) {
             state.reminderAt = target
+            // 设置成功后（而不是之前）才提示精确闹钟降级，避免打断流程
+            notifyIfInexact()
         } else {
             Toast.makeText(
                 context,
