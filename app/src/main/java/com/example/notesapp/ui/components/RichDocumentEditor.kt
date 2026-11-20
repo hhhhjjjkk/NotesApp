@@ -296,7 +296,17 @@ fun EditableImageBlock(
     // 保证列表最新，双重保护防丢帧。
     val currentOnWidthFractionChange by rememberUpdatedState(onWidthFractionChange)
     val currentWidthPx by rememberUpdatedState(availableWidthPx)
-    var currentFraction by remember { mutableStateOf<Float>(block.widthFraction) }
+    // 本地宽度比例：既要跟随外部数据（旋转屏恢复、撤销等），
+    // 也要在拖动中立即更新自己 —— 后者是 v3.11.5 修的关键：
+    // 此前只在初始化时读过 block.widthFraction，拖动算出新值后
+    // 只通知了父级、没有写回本地，图片宽度始终不变，表现为「缩放不能用」。
+    var currentFraction by remember(block.id) {
+        mutableStateOf(block.widthFraction)
+    }
+    // 外部变化（父级数据更新）时同步回来，避免本地状态与真实数据脱节
+    LaunchedEffect(block.widthFraction) {
+        currentFraction = block.widthFraction
+    }
 
     // 异步加载图片，状态为 Loading/Ready/Failed 三态。
     val imageState by rememberNoteImageState(
@@ -385,10 +395,17 @@ fun EditableImageBlock(
                     .size(44.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.35f))
+                    // ⚠️ 手柄必须在父级 combinedClickable 之前抢占手势（v3.11.5）：
+                    // 父容器带 combinedClickable，拖动起始阶段会与点击检测竞争，
+                    // 手柄拿不到持续位移事件，缩放会表现为「拖不动」。
+                    // 用 awaitEachGesture 先等按下、立即消费，再交给 detectDragGestures。
                     .pointerInput(block.id) {
                         var working = currentFraction
                         detectDragGestures(
-                            onDragStart = { working = currentFraction }
+                            onDragStart = { working = currentFraction },
+                            // 拖动结束把最终值再同步一次，避免最后一帧丢失
+                            onDragEnd = { currentOnWidthFractionChange(working) },
+                            onDragCancel = { currentOnWidthFractionChange(working) }
                         ) { change, dragAmount ->
                             // 消费事件，避免父级纵向滚动抢走手势
                             change.consume()
@@ -398,6 +415,8 @@ fun EditableImageBlock(
                                 dragX = dragAmount.x,
                                 availableWidthPx = currentWidthPx
                             )
+                            // 先更新本地状态让宽度立即跟手，再通知父级持久化
+                            currentFraction = working
                             currentOnWidthFractionChange(working)
                         }
                     },
