@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.notesapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 69
-        versionName = "3.11.5"
+        versionCode = 70
+        versionName = "3.11.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

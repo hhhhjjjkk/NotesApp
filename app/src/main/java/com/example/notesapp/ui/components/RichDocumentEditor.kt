@@ -466,14 +466,30 @@ fun NoteImageThumbnail(
     imageStore: NoteImageStore,
     image: DocumentBlock.Image,
     modifier: Modifier = Modifier,
-    maxDimension: Int = 512
+    // ⚠️ 首页卡片缩略图刻意用小尺寸解码（v3.11.6）：
+    // 显示区约半栏宽 × 120dp（2x 屏 ≈ 320×240px），此前却按 512px 长边解码，
+    // 解码量约为显示需求的 4 倍（面积）。降到 256px 后解码提速约 4 倍，
+    // 冷启动时图片卡片不再「隔一会才出来」；观感无差异（仍高于显示密度）。
+    maxDimension: Int = 256
 ) {
     val state by rememberNoteImageState(imageStore, image.fileName, maxDimension)
-    val ready = state as? NoteImageState.Ready ?: return
-    Image(
-        bitmap = ready.bitmap.asImageBitmap(),
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = modifier
-    )
+    when (val s = state) {
+        is NoteImageState.Ready -> Image(
+            bitmap = s.bitmap.asImageBitmap(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+        )
+        // ⚠️ 加载中/失败必须**保留同尺寸占位**（v3.11.6）：
+        // 此前这里对非 Ready 状态直接 `return`（什么都不画），
+        // 卡片高度在解码完成那一刻突然变高，把下方所有卡片整体推下去，
+        // 用户看到的就是「图片备忘录隔一会才弹出来、下面内容跳一下」。
+        // 占位用主题表面色，尺寸与图片完全一致，布局从一开始就稳定。
+        NoteImageState.Loading, NoteImageState.Failed -> Box(
+            modifier = modifier.background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(10.dp)
+            )
+        )
+    }
 }
