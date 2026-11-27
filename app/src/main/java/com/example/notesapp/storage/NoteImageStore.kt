@@ -147,15 +147,43 @@ class NoteImageStore(private val context: Context) {
         return withContext(Dispatchers.IO) {
             val file = fileFor(fileName) ?: return@withContext null
             if (!file.exists()) return@withContext null
-            val decoded = runCatching { decodeDownsampled(file, maxDimension) }.getOrNull()
+
+            // ⚠️ 磁盘缩略图缓存（v3.11.7）：首页缩略图此前为了冷启动速度降到 256px，
+            // 结果明显发糊。正确做法是「首次清晰解码一次 → 缓存到磁盘 →
+            // 之后冷启动直接从磁盘读小图」，兼顾清晰与速度。
+            val thumbFile = thumbnailFile(fileName, maxDimension)
+            val fromDisk = if (thumbFile.exists()) {
+                runCatching { BitmapFactory.decodeFile(thumbFile.absolutePath) }.getOrNull()
+            } else null
+            val decoded = fromDisk ?: runCatching { decodeDownsampled(file, maxDimension) }.getOrNull()
                 ?: return@withContext null
+            if (fromDisk == null) {
+                // 首次解码成功后写入磁盘缓存（失败不影响本次显示）
+                runCatching {
+                    FileOutputStream(thumbFile).use { out ->
+                        decoded.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                    }
+                }
+            }
             bitmapCache.put(key, decoded)
             decoded
         }
     }
 
+    /** 缩略图磁盘缓存路径：与原图同目录，独立前缀，避免被图片枚举当成原图。 */
+    private fun thumbnailFile(fileName: String, maxDimension: Int): File {
+        val dir = imageDir()
+        val safe = fileName.substringBeforeLast('.').ifBlank { "thumb" }
+        return File(dir, ".thumb_${safe}_${maxDimension}.jpg")
+    }
+
     fun delete(fileName: String) {
         fileFor(fileName)?.delete()
+        // 删除原图时一并删除磁盘缩略图缓存，否则残留的 .thumb_ 文件会永远占空间
+        runCatching {
+            imageDir().listFiles { f -> f.name.startsWith(".thumb_${fileName.substringBeforeLast('.')}_") }
+                ?.forEach { it.delete() }
+        }
         // 文件没了缓存里的位图就成了「幽灵图」：即使文件已删除，
         // 列表仍可能短暂显示旧图。删除文件的同时必须清缓存。
         evict(fileName)

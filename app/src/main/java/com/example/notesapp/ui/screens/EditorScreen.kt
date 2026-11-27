@@ -9,11 +9,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -24,6 +30,7 @@ import com.example.notesapp.notification.NotificationScheduler
 import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.ui.components.RichDocumentEditor
+import com.example.notesapp.ui.components.SharedExpandBox
 import com.example.notesapp.ui.screens.editor.EditorBottomBar
 import com.example.notesapp.ui.screens.editor.EditorTimePickerDialog
 import com.example.notesapp.ui.screens.editor.EditorTitleField
@@ -56,9 +63,28 @@ import kotlinx.coroutines.delay
 fun EditorScreen(
     viewModel: NotesViewModel,
     noteId: Long,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** 共享元素展开起点（相对全屏矩形比例）；null 表示不播展开动画（通知深链冷启动） */
+    expandFrom: androidx.compose.ui.geometry.Rect? = null
 ) {
     val state = rememberEditorState()
+    // 关闭动画状态：置 true 后 SharedExpandBox 反向收拢，动画结束再真正 pop
+    var closing by remember { mutableStateOf(false) }
+    // 退出时「动画已播完」与「数据已保存完」是两个并行条件，都满足才真正 pop。
+    // ⚠️ v3.12.1：此前是先等 saveAndExit 保存完才启动动画，
+    // 保存耗时几十~几百毫秒期间画面完全静止 → 用户感知为「返回动画拖拉」。
+    // 现在点击立即启动收拢动画，保存并行进行，两者都完成才退出。
+    var saveDone by remember { mutableStateOf(false) }
+    var animDone by remember { mutableStateOf(false) }
+    fun tryPop() {
+        if ((animDone || expandFrom == null) && saveDone) onBack()
+    }
+
+    // ===== 内容跟随页面展开（v3.11.8）=====
+    // 不再给文字单独的浮动动画：此前 titleShiftY/bodyShiftY 与页面的展开运动
+    // 方向叠加，导致打开/关闭时文字「明明页面在放大、文字却在乱飘」。
+    // 现在文字完全由 SharedExpandBox 的展开进度 p 驱动，与页面同步：
+    //   打开 p:0→1 文字随页面一起向上铺开到位；关闭 p:1→0 随页面一起降回卡片。
     val bodyFocusRequester = remember { FocusRequester() }
     val titleFocusRequester = remember { FocusRequester() }
     // 显式唤起输入法：Compose 里获得焦点并不等于键盘弹出
@@ -126,7 +152,16 @@ fun EditorScreen(
         existingNote = existingNote,
         noteId = noteId,
         currentType = currentType,
-        onBack = onBack
+        // 顶栏按钮与系统返回手势共用：退出一触发就立刻启动收拢动画
+        onExitStart = {
+            if (expandFrom != null && !closing) closing = true else animDone = true
+        },
+        // 数据落库后不直接 pop：等动画结束的 onClosed 再返回
+        onBack = {
+            // 保存完成。若动画还没播完，等动画结束的 onClosed 再 pop
+            saveDone = true
+            tryPop()
+        }
     )
 
     Scaffold(
@@ -143,25 +178,39 @@ fun EditorScreen(
     ) { padding ->
         val isDark = MaterialTheme.colorScheme.background.isDarkColor()
 
-        Box(
+        SharedExpandBox(
+            from = expandFrom,
+            closing = closing,
+            onClosed = {
+                animDone = true
+                tryPop()
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-        ) {
+        ) { expandProgress ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
             ) {
-                EditorTitleField(
-                    title = state.title,
-                    onTitleChange = { state.title = it },
-                    focusRequester = titleFocusRequester,
-                    onRequestKeyboard = {
-                        titleFocusRequester.requestFocus()
-                        keyboardController?.show()
+                // 文字只做淡入：整页已在从下方滑入，文字**不应再有自己的位移**，
+                // 否则两段运动叠加会互相打架（之前「文字乱飘」的根因）。
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        alpha = 0.6f + 0.4f * expandProgress
                     }
-                )
+                ) {
+                    EditorTitleField(
+                        title = state.title,
+                        onTitleChange = { state.title = it },
+                        focusRequester = titleFocusRequester,
+                        onRequestKeyboard = {
+                            titleFocusRequester.requestFocus()
+                            keyboardController?.show()
+                        }
+                    )
+                }
 
                 // 回收站只读横幅：通知深链可能直达已移入回收站的笔记。
                 // 此时禁止编辑保存（避免覆盖回收站状态），提供一键恢复。
@@ -181,29 +230,48 @@ fun EditorScreen(
                     }
                 )
 
-                RichDocumentEditor(
-                    blocks = state.blocks,
-                    onBlocksChange = { state.blocks = it },
-                    imageStore = imageStore,
-                    onAddTextAfterImage = { imageId -> imagePicker.insertTextAfterImage(imageId) },
-                    onInsertImageBefore = { imageId -> imagePicker.insertBefore(imageLauncher, imageId) },
-                    onBlankAreaClick = {
-                        val lastTextBlock = state.blocks.lastOrNull() as? DocumentBlock.Text
-                        val targetBlock = lastTextBlock ?: DocumentBlock.text("")
-                        if (lastTextBlock == null) {
-                            state.blocks = state.blocks + targetBlock
-                        }
-                        state.focusBlockId = targetBlock.id
-                    },
+                Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
-                    textColor = MaterialTheme.colorScheme.onBackground,
-                    cursorColor = MaterialTheme.colorScheme.primary,
-                    hintText = stringResource(R.string.content_hint),
-                    focusBlockId = state.focusBlockId,
-                    focusRequester = bodyFocusRequester
-                )
+                        .weight(1f)
+                        .graphicsLayer {
+                            alpha = 0.6f + 0.4f * expandProgress
+                        }
+                ) {
+                    RichDocumentEditor(
+                        blocks = state.blocks,
+                        onBlocksChange = { state.blocks = it },
+                        // 图片块拖动重排：与目标位置的相邻块交换，文字自动让位不被覆盖。
+                        onReorderImage = { imageId, direction ->
+                            val list = state.blocks.toMutableList()
+                            val from = list.indexOfFirst { it.id == imageId }
+                            val to = from + direction
+                            if (from >= 0 && to in list.indices) {
+                                val moved = list.removeAt(from)
+                                list.add(to, moved)
+                                state.blocks = list
+                            }
+                        },
+                        imageStore = imageStore,
+                        onAddTextAfterImage = { imageId -> imagePicker.insertTextAfterImage(imageId) },
+                        onInsertImageBefore = { imageId -> imagePicker.insertBefore(imageLauncher, imageId) },
+                        onBlankAreaClick = {
+                            val lastTextBlock = state.blocks.lastOrNull() as? DocumentBlock.Text
+                            val targetBlock = lastTextBlock ?: DocumentBlock.text("")
+                            if (lastTextBlock == null) {
+                                state.blocks = state.blocks + targetBlock
+                            }
+                            state.focusBlockId = targetBlock.id
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+                        textColor = MaterialTheme.colorScheme.onBackground,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        hintText = stringResource(R.string.content_hint),
+                        focusBlockId = state.focusBlockId,
+                        focusRequester = bodyFocusRequester
+                    )
+                }
             }
 
             EditorBottomBar(

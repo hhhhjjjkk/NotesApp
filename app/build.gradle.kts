@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.notesapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 70
-        versionName = "3.11.6"
+        versionCode = 71
+        versionName = "3.12.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -55,6 +55,11 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+    // 2026-11-21 提速：跳过 release 构建时的 lint 分析（lintVital 在 assembleRelease 中占大头，
+    // 与产物正确性无关；lint 仍可单独运行）
+    lint {
+        checkReleaseBuilds = false
     }
 }
 

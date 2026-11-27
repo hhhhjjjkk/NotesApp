@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -90,8 +91,9 @@ private val BottomBarHeight = 76.dp
 fun HomeScreen(
     viewModel: NotesViewModel,
     settingsViewModel: SettingsViewModel,
-    onNoteClick: (Long) -> Unit,
-    onAddClick: () -> Unit,
+    /** 打开笔记：附带卡片中心的屏幕比例，供编辑页「从哪来回哪去」展开动画使用 */
+    onNoteClick: (Long, Float, Float, Float, Float) -> Unit,
+    onAddClick: (Float, Float) -> Unit,
     onSettingsClick: () -> Unit,
     onTrashClick: () -> Unit
 ) {
@@ -135,6 +137,11 @@ fun HomeScreen(
     val cardBounds = remember { mutableMapOf<Long, Rect>() }
     // 粒子覆盖层自身在 root 坐标系中的原点，用于把卡片矩形换算到覆盖层本地坐标
     var particleOrigin by remember { mutableStateOf(Offset.Zero) }
+    var rootWidthPx by remember { mutableFloatStateOf(1f) }
+    var rootHeightPx by remember { mutableFloatStateOf(1f) }
+    val localView = androidx.compose.ui.platform.LocalView.current
+    val windowWidthPx = localView.width.coerceAtLeast(1).toFloat()
+    val windowHeightPx = localView.height.coerceAtLeast(1).toFloat()
     var dissolveBursts by remember { mutableStateOf<List<NoteDissolveBurst>>(emptyList()) }
     var dissolveSeq by remember { mutableStateOf(0L) }
 
@@ -318,7 +325,23 @@ fun HomeScreen(
                                             selectedIds + note.id
                                         }
                                     } else {
-                                        onNoteClick(note.id)
+                                        // 卡片在 **root 坐标系**（与屏幕一致）中的中心与尺寸，
+                                        // 换算成相对全屏的比例：编辑页从这个矩形慢慢长到全屏，
+                                        // 返回时缩回同一矩形 —— 「从哪来回哪去」。
+                                        val bounds = cardBounds[note.id]
+                                        val cx = if (bounds != null && bounds.width > 0f)
+                                            bounds.center.x / windowWidthPx else 0.5f
+                                        val cy = if (bounds != null && bounds.height > 0f)
+                                            bounds.center.y / windowHeightPx else 0.5f
+                                        val sw = if (bounds != null && bounds.width > 0f)
+                                            bounds.width / windowWidthPx else 0.34f
+                                        val sh = if (bounds != null && bounds.height > 0f)
+                                            bounds.height / windowHeightPx else 0.14f
+                                        onNoteClick(
+                                            note.id,
+                                            cx.coerceIn(0f, 1f), cy.coerceIn(0f, 1f),
+                                            sw.coerceIn(0.05f, 1f), sh.coerceIn(0.05f, 1f)
+                                        )
                                     }
                                 },
                                 onLongClick = { sheetNote = note },
@@ -350,7 +373,7 @@ fun HomeScreen(
                 noteType = noteType,
                 onNoteTypeChange = { viewModel.setNoteType(it) },
                 isDark = isDark,
-                onAddClick = onAddClick,
+                onAddClick = { onAddClick(0.5f, 0.5f) },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
@@ -395,7 +418,11 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(3f)
-                    .onGloballyPositioned { particleOrigin = it.positionInRoot() }
+                    .onGloballyPositioned {
+                        particleOrigin = it.positionInRoot()
+                        rootWidthPx = it.size.width.toFloat().coerceAtLeast(1f)
+                        rootHeightPx = it.size.height.toFloat().coerceAtLeast(1f)
+                    }
             )
         }
     }

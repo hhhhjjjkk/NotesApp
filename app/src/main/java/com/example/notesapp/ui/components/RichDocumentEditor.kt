@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.Icon
@@ -67,6 +68,7 @@ import com.example.notesapp.R
 import com.example.notesapp.data.DocumentBlock
 import com.example.notesapp.data.RichDocumentCodec
 import com.example.notesapp.storage.NoteImageStore
+import kotlin.math.abs
 
 /**
  * [DocumentBlock] 列表的 rememberSaveable 保存器。
@@ -114,6 +116,8 @@ fun RichDocumentEditor(
     focusBlockId: String? = null,
     focusRequester: FocusRequester? = null,
     onBlankAreaClick: () -> Unit = {},
+    /** 图片块重排：direction = -1 上移一位，+1 下移一位。文字块会自动让位，不被覆盖。 */
+    onReorderImage: (imageId: String, direction: Int) -> Unit = { _, _ -> },
     accentColor: Color = MaterialTheme.colorScheme.primary
 ) {
     val density = LocalDensity.current
@@ -254,6 +258,7 @@ fun RichDocumentEditor(
                                     }
                                 )
                             },
+                            onReorder = { direction -> onReorderImage(block.id, direction) },
                             onRemove = {
                                 onBlocksChange(currentBlocks.filterNot { it.id == block.id })
                             }
@@ -288,7 +293,9 @@ fun EditableImageBlock(
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     onWidthFractionChange: (Float) -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    /** 拖动重排：direction = -1 上移一位，+1 下移一位 */
+    onReorder: (direction: Int) -> Unit = {}
 ) {
     // 同一帧可能连续收到多次 onWidthFractionChange（拖拽抖动、多指），
     // 为避免「后到先处理」覆盖前一个结果，用 rememberUpdatedState 捕获
@@ -366,6 +373,42 @@ fun EditableImageBlock(
                         color = textColor.copy(alpha = 0.5f)
                     )
                 }
+            }
+
+            // 左上角重排手柄（v3.11.7）：纵向拖动超过阈值即与相邻块交换位置。
+            // 与右下角缩放手柄、右上角删除按钮分离，三者互不抢手势。
+            // 重排后文字块自动下移让位，不会被图片覆盖（图片始终独占自己的块）。
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .pointerInput(block.id) {
+                        var accumulatedY = 0f
+                        val threshold = 64f
+                        detectDragGestures(
+                            onDragStart = { accumulatedY = 0f },
+                            onDragEnd = { accumulatedY = 0f },
+                            onDragCancel = { accumulatedY = 0f }
+                        ) { change, dragAmount ->
+                            change.consume()
+                            accumulatedY += dragAmount.y
+                            if (abs(accumulatedY) >= threshold) {
+                                onReorder(if (accumulatedY < 0f) -1 else 1)
+                                accumulatedY = 0f  // 防连续触发，每次拖动最多移动一位
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DragIndicator,
+                    contentDescription = "移动图片位置",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
             }
 
             // 删除按钮（右上角） — 扩大触摸热区到 48dp 最小尺寸（Material 3 标准）
@@ -466,11 +509,12 @@ fun NoteImageThumbnail(
     imageStore: NoteImageStore,
     image: DocumentBlock.Image,
     modifier: Modifier = Modifier,
-    // ⚠️ 首页卡片缩略图刻意用小尺寸解码（v3.11.6）：
-    // 显示区约半栏宽 × 120dp（2x 屏 ≈ 320×240px），此前却按 512px 长边解码，
-    // 解码量约为显示需求的 4 倍（面积）。降到 256px 后解码提速约 4 倍，
-    // 冷启动时图片卡片不再「隔一会才出来」；观感无差异（仍高于显示密度）。
-    maxDimension: Int = 256
+    // ⚠️ 清晰度与速度的平衡（v3.11.7）：
+    // v3.11.6 为提速降到 256px 导致明显发糊。现在恢复 512px 清晰度，
+    // 速度改由 NoteImageStore 的**磁盘缩略图缓存**保证：
+    // 首次解码后缓存到磁盘，之后冷启动直接读小图（零 JPEG 解码），
+    // 既清晰又比 v3.11.6 更快。
+    maxDimension: Int = 512
 ) {
     val state by rememberNoteImageState(imageStore, image.fileName, maxDimension)
     when (val s = state) {

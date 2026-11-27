@@ -71,8 +71,16 @@ class EditorSaveController(
     }
 
     /** 返回（或系统返回手势）：保存并退出。 */
-    fun saveAndExit(currentType: Int) {
+    /**
+     * 退出保存。
+     *
+     * @param onExitStart 退出刚被触发时立即回调（用于启动收拢动画）。
+     *        必须在保存前调用：保存是异步的，若等它完成再播动画，
+     *        用户在这段时间看到画面静止，感知为「滑动返回没反应」。
+     */
+    fun saveAndExit(currentType: Int, onExitStart: () -> Unit = {}) {
         if (state.isExiting) return  // 防止重复触发
+        onExitStart()
         state.isExiting = true
         // 回收站笔记只读展示：退出时不保存（保存会通过 Repository 的 update 分支，
         // 虽然不会覆盖 isTrashed，但用户在回收站视图里的编辑本来就不该生效），
@@ -133,7 +141,9 @@ fun EditorSaveEffects(
     existingNote: Note?,
     noteId: Long,
     currentType: Int,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** 退出触发的瞬间回调（启动动画），顶栏与系统返回手势共用 */
+    onExitStart: () -> Unit = {}
 ): EditorSaveController {
     val context = LocalContext.current
     val controller = androidx.compose.runtime.remember {
@@ -141,8 +151,9 @@ fun EditorSaveEffects(
         EditorSaveController(state, viewModel, existingNote, noteId, onBack)
     }
 
-    // 系统返回手势/按键：与顶栏返回按钮走同一条 saveAndExit 路径
-    BackHandler { controller.saveAndExit(currentType) }
+    // 系统返回手势/按键：与顶栏返回按钮走同一条 saveAndExit 路径，
+    // 都会先回调 onExitStart 启动动画，再异步保存
+    BackHandler { controller.saveAndExit(currentType, onExitStart) }
 
     // 自动保存：仅在编辑现有笔记且未退出时触发，避免与返回保存重复。
     // 以 blocks 为 key 触发，因此插入图片、拖拽改尺寸同样会触发自动保存。

@@ -83,20 +83,30 @@ fun LiquidSwipeDelete(
 
     // 拖动中逐帧：卡片跟手，球钉在屏边
     //
-    // ⚠️ 圆球「出现」必须与「消失」对称（v3.11.1）：消失是 alpha 淡出，
-    // 此前出现却用 snapTo(1f) 瞬间显示——滑动时红球「啪」地蹦出来，
-    // 与松手时的柔和淡出观感割裂。现在改为同参数的淡入。
+    // 圆球出现：必须**立即**响应，不能有延时。
+    // ⚠️ 踩坑（v3.11.8）：此前淡入写在 LaunchedEffect(dragX, dragging) 里，
+    // 而 dragX 每帧变化都会重启该 effect → animateTo 被反复取消重启，
+    // 淡入永远走不完，用户感知为「滑动后红球要等一下才弹出」。
+    // 现在：手势开始的瞬间就把球准备好（snapTo 到位），淡入用独立协程跑一次，
+    // 不受每帧 dragX 变化影响。
+    var ballFadeJob by remember { mutableStateOf<Job?>(null) }
     LaunchedEffect(dragX, dragging) {
         if (dragging) {
             cardShift.snapTo(dragX * cardFollow)
-            if (abs(dragX) > 4f) {
-                if (lockedDir == 0f) lockedDir = if (dragX < 0f) -1f else 1f
+            // 只要开始滑动就立刻定方向、显形，不等 4px 阈值
+            if (lockedDir == 0f && abs(dragX) > 0.5f) {
+                lockedDir = if (dragX < 0f) -1f else 1f
+            }
+            if (lockedDir != 0f) {
                 lastDir = lockedDir
-                ballX.snapTo(restBallCx(lastDir))
-                ballVisible = true
-                // 只在「首次出现」时启动淡入，后续每帧不重复启动
-                if (iconAlpha.value < 1f) {
-                    iconAlpha.animateTo(1f, tween(BALL_FADE_MS))
+                if (!ballVisible) {
+                    ballX.snapTo(restBallCx(lastDir))
+                    ballVisible = true
+                    // 独立的淡入协程：只启动一次，不被后续帧打断
+                    ballFadeJob?.cancel()
+                    ballFadeJob = scope.launch {
+                        iconAlpha.animateTo(1f, tween(BALL_FADE_MS))
+                    }
                 }
             }
         }
@@ -154,6 +164,7 @@ fun LiquidSwipeDelete(
                     onDragStart = {
                         cardJob?.cancel()
                         ballJob?.cancel()
+                        ballFadeJob?.cancel()
                         dragging = true
                         dragX = 0f
                         lockedDir = 0f
